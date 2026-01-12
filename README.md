@@ -19,6 +19,7 @@ commander_event_tournament/
 │   │    ├── swiss_pairing_service.dart
 │   │    ├── scoring_service.dart
 │   │    ├── rule_assignment_service.dart
+│   │    ├── match_result_service.dart
 │   │    └── timer_service.dart
 │   │
 │   ├── data/
