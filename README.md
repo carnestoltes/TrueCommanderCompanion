@@ -23,10 +23,11 @@ commander_event_tournament/
 │   │    └── timer_service.dart
 │   │
 │   ├── data/
+│   │    └── local_db.dart
 │   ├── repositories/
 │   │    ├── player_repository.dart
 │   │    └── tournament_repository.dart
-│   └── local_db.dart
+│   │
 │   │
 │   ├── ui/
 │   ├── screens/
