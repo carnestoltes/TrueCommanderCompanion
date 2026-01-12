@@ -24,6 +24,7 @@ commander_event_tournament/
 │   │
 │   ├── data/
 │   │    └── local_db.dart
+│   │
 │   ├── repositories/
 │   │    ├── player_repository.dart
 │   │    └── tournament_repository.dart
