@@ -28,7 +28,6 @@ commander_event_tournament/
 │   │    ├── player_repository.dart
 │   │    └── tournament_repository.dart
 │   │
-│   │
 │   ├── ui/
 │   ├── screens/
 │   │   ├── home_screen.dart
