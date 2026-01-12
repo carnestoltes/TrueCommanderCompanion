@@ -40,7 +40,7 @@ commander_event_tournament/
 │   │   └── timer_widget.dart
 │   │
 │   ├── utils/
-|   │   ├── constants.dart
+│   │   ├── constants.dart
 │   │   └── helpers.dart
 │   └── main.dart
 │
