@@ -3,7 +3,7 @@ Fair assignment of manage for tournament in multipalyer commander
 
 ## High Level Architecture
 
--- bash
+```bash
 lib/
 │
 ├── main.dart
@@ -44,7 +44,7 @@ lib/
 └── utils/
     ├── constants.dart
     └── helpers.dart
---
+```
 
 ## Features
 
