@@ -6,32 +6,28 @@ Fair assignment of manage for tournament in multipalyer commander
 ```bash
 commander_event_tournament/
 |
-lib/
-│
-├── main.dart
-│
-├── domain/
-│   ├── player.dart
-│   ├── table.dart
-│   ├── match.dart
-│   ├── round.dart
-│   ├── tournament.dart
-│   └── rule.dart
-│
-├── services/
-│   ├── swiss_pairing_service.dart
-│   ├── scoring_service.dart
-│   ├── rule_assignment_service.dart
-│   └── timer_service.dart
-│
-├── data/
-│   ├── repositories/
-│   │   ├── player_repository.dart
-│   │   └── tournament_repository.dart
+├──lib/
+│   ├── domain/
+│   │   ├── player.dart
+│   │   ├── table.dart
+│   │   ├── match.dart
+│   │   ├── round.dart
+│   │   ├── tournament.dart
+│   │   └── rule.dart
 │   │
+│   ├── services/
+│   │    ├── swiss_pairing_service.dart
+│   │    ├── scoring_service.dart
+│   │    ├── rule_assignment_service.dart
+│   │    └── timer_service.dart
+│   │
+│   ├── data/
+│   ├── repositories/
+│   │    ├── player_repository.dart
+│   │    └── tournament_repository.dart
 │   └── local_db.dart
-│
-├── ui/
+│   │
+│   ├── ui/
 │   ├── screens/
 │   │   ├── home_screen.dart
 │   │   ├── tournament_screen.dart
@@ -39,13 +35,15 @@ lib/
 │   │   └── standings_screen.dart
 │   │
 │   └── widgets/
-│       ├── player_tile.dart
-│       ├── table_card.dart
-│       └── timer_widget.dart
+│   │   ├── player_tile.dart
+│   │   ├── table_card.dart
+│   │   └── timer_widget.dart
+│   │
+│   ├── utils/
+|   │   ├── constants.dart
+|   │   └── helpers.dart
+│   └── main.dart
 │
-├── utils/
-|    ├── constants.dart
-|    └── helpers.dart
 ├── pubspec.yaml
 └── android/
 ```
