@@ -57,6 +57,22 @@ lib/
 Example scenario
 An 8 players end the first round and the score result is:
 
+|Player|Points|
+|------|------|
+|   A  |  12  |
+|   B  |  11  |
+|   C  |  10  |
+|   D  |  9   |
+|   E  |  6   |
+|   F  |  5   |
+|   G  |  4   |
+|   H  |  3   |
+
+Model of **naive swiss** take the four player with the most score in one table and the tail of other four in the other table so, making the avg of two pairing, the first table has an avg of 10.5 points against the second tables has only an avg of 4.5.
+Translation meaning, death teable vs free win table, strong player elimated each other while weak players farm points.
+
+Our model, **balanced swiss**, transition and put in table one A,D,E,H and table two B,C,F,G given as result of avg in point 7.5 in each table.
+
 * Minimize the number of repeated opponents thought the tournament rounds
 
 Example scenario
@@ -73,7 +89,7 @@ Round 1 --> P1 in T1, P2 in T2, P3 in T3.
 Round 2 (asuming the scale of points) --> P4 in T3, P5 in T2 and P6 in T1.
 The order of assignment the tables use reverse order but still respecfully with swiss normative.
 
-*Complexity in the worst case: O(n^2)*
+**Complexity in the worst case: O(n^2)**
 
 ## Rule Assignment
 ### Motivation
