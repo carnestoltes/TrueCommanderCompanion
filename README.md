@@ -4,6 +4,8 @@ Fair assignment of manage for tournament in multipalyer commander
 ## High Level Architecture
 
 ```bash
+commander_event_tournament/
+|
 lib/
 │
 ├── main.dart
@@ -41,9 +43,11 @@ lib/
 │       ├── table_card.dart
 │       └── timer_widget.dart
 │
-└── utils/
-    ├── constants.dart
-    └── helpers.dart
+├── utils/
+|    ├── constants.dart
+|    └── helpers.dart
+├── pubspec.yaml
+└── android/
 ```
 
 # Features
