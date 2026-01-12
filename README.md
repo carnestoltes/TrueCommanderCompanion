@@ -55,6 +55,7 @@ lib/
 * Allow tables of 3 players only when unavoidable
 
 Example scenario
+
 An 8 players end the first round and the score result is:
 
 |Player|Points|
@@ -73,9 +74,12 @@ Translation meaning, death teable vs free win table, strong player elimated each
 
 Our model, **balanced swiss**, transition and put in table one A,D,E,H and table two B,C,F,G given as result of avg in point 7.5 in each table.
 
+Result, in each match obtain 1 strong player, 1 mid-strong player, 1 mid-weak player and 1 weak player.
+
 * Minimize the number of repeated opponents thought the tournament rounds
 
 Example scenario
+
 Exist eight players in the event, A .. H and player A already plays with B, C and D so E,F,G,H are preferred but just in case we need it, player A repeat pairing against player B,C or D dependending of global classification.
 
 * Balance average points
