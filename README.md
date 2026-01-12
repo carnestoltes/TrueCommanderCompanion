@@ -5,7 +5,7 @@ Fair assignment of manage for tournament in multipalyer commander
 
 ```bash
 commander_event_tournament/
-|
+│
 ├──lib/
 │   ├── domain/
 │   │   ├── player.dart
@@ -41,7 +41,7 @@ commander_event_tournament/
 │   │
 │   ├── utils/
 |   │   ├── constants.dart
-|   │   └── helpers.dart
+│   │   └── helpers.dart
 │   └── main.dart
 │
 ├── pubspec.yaml
