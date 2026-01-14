@@ -106,6 +106,23 @@ The point is reaching the way to break the tie in a way fairness and not suggest
 * Rule are not visible at the beggining of each round
 * The rule only assign when the timer ends or the user click on "See rule"
 
+For improve the experience in game and trying to minimize the role playing around this rules, i will extend and implement an 8 specific rules obtaining as result a probability of 12,5% equally. The presentation of tiebreaker rules are show below:
+
+### Total Life
+
+### Priority Order
+
+### Commander Damage Inflicted
+
+### Commander Damage Received
+
+### Number of Permanents (excluding tokens and lands)
+
+### Number of Mana Sources (permanents)
+
+### Number of Cards Remaining in decks
+
+### Devotion to your commander
 # Collaboration
 *In this section i want to thank a person has gone to the care to develop a modality inside of Commander for make arrive everyone the posibility of a good experience agains others formats prioritizing the ingenuity versus stapples*
 
