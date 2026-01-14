@@ -76,15 +76,15 @@ An 8 players end the first round and the score result is:
 Model of **naive swiss** take the four player with the most score in one table and the tail of other four in the other table so, making the avg of two pairing, the first table has an avg of 10.5 points against the second tables has only an avg of 4.5.
 Translation meaning, death teable vs free win table, strong player elimated each other while weak players farm points.
 
-Our model, **balanced swiss**, transition and put in table one A,D,E,H and table two B,C,F,G given as result of avg in point 7.5 in each table.
+Our model, **balanced swiss**, transition and put in table one A, D, E, H and table two B, C, F, G given as result of avg in point 7.5 in each table.
 
-Result, in each match obtain 1 strong player, 1 mid-strong player, 1 mid-weak player and 1 weak player.
+Result in each match obtain 1 strong player, 1 mid-strong player, 1 mid-weak player and 1 weak player.
 
 * Minimize the number of repeated opponents thought the tournament rounds
 
 Example scenario
 
-Exist eight players in the event, A .. H and player A already plays with B, C and D so E,F,G,H are preferred but just in case we need it, player A repeat pairing against player B,C or D dependending of global classification.
+Exist eight players in the event, A .. H and player A already plays with B, C and D so E, F, G, H are preferred but just in case we need it, player A repeat pairing against player B, C or D dependending of global classification.
 
 * Balance average points
 
