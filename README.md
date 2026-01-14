@@ -106,3 +106,9 @@ The point is reaching the way to break the tie in a way fairness and not suggest
 * Rule are not visible at the beggining of each round
 * The rule only assign when the timer ends or the user click on "See rule"
 
+# Collaboration
+*In this section i want to thank a person has gone to the care to develop a modality inside of Commander for make arrive everyone the posibility of a good experience agains others formats prioritizing the ingenuity versus stapples*
+
+## Rules in Spanish
+[https://drive.google.com/file/d/1JR_MFuC7W1gXlIDCWRgXho9N8UAkhSFv/view]
+
