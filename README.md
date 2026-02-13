@@ -110,19 +110,36 @@ For improve the experience in game and trying to minimize the role playing aroun
 
 ### Total Life
 
+Means a total life a player has in the moment ends the time of the round (actually).
+
 ### Priority Order
+
+In this case, the rule applies the tie break using the clockwise, so the player has start will be the first eliminated and go on in order.
 
 ### Commander Damage Inflicted
 
+Total damage inflicted from your commander to others players.
+
 ### Commander Damage Received
+
+Against the previous rule, total damage received from others commander players to you.
 
 ### Number of Permanents (excluding tokens and lands)
 
+This rules applies the logical of count a buch of permanents in your board *excluding lands and tokens.*
+
 ### Number of Mana Sources (permanents)
+
+Account for number of entites could produce mana like, mana rocks, mana dorks ...
 
 ### Number of Cards Remaining in decks
 
+Keep simple, the player has a less number of cards remainding in his library lose the round.
+
 ### Devotion to your commander
+
+Still working but, the meaning of this rule focus on the number of simbols in board associated with your commander, so the player has more devotion wins the round.
+
 # Collaboration
 *In this section i want to thank a person has gone to the care to develop a modality inside of Commander for make arrive everyone the posibility of a good experience agains others formats prioritizing the ingenuity versus stapples*
 
