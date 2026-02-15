@@ -146,3 +146,6 @@ Still working but, the meaning of this rule focus on the number of simbols in bo
 ## Rules in Spanish
 [https://drive.google.com/file/d/1JR_MFuC7W1gXlIDCWRgXho9N8UAkhSFv/view]
 
+## Blog
+[https://sites.google.com/view/magicbedh]
+
