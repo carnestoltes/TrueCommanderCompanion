@@ -1,0 +1,11 @@
+name: shared_logic
+description: Shared domain models and tournament logic.
+version: 1.0.0
+publish_to: 'none'
+resolution: workspace
+
+environment:
+  sdk: ^3.11.0
+
+dependencies:
+  meta: ^1.11.0

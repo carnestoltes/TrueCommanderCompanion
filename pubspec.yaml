@@ -1,0 +1,13 @@
+name: true_commander_workspace
+version: 1.0.0
+publish_to: 'none'
+
+ 
+environment:
+  sdk: ^3.11.0
+
+# This lists the sub-packages that belong to the root
+workspace:
+  - apps/true_command
+  - apps/server
+  - packages/shared_logic

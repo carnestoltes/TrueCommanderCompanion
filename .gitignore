@@ -1,0 +1,15 @@
+# Secrets
+.env
+*.bat
+
+# Dart/Flutter
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+build/
+.pub/
+
+# IDE
+.vscode/
+.idea/

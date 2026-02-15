@@ -1,0 +1,26 @@
+name: true_command
+version: 1.0.0
+description: "A community project for tournament fairness and integrity."
+publish_to: 'none'
+resolution: workspace
+
+environment:
+  sdk: ^3.11.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  http: ^1.1.0
+  shared_logic:
+    path: ../../packages/shared_logic
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/logo.png
