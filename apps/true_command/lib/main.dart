@@ -62,42 +62,116 @@ final List<String> _tieBreakRules = [
   }
 
   // 1. Function to Change Server IP
-void _showChangeIpDialog() {
-  TextEditingController ipController = TextEditingController(text: serverIp);
-  showDialog(
-    context: context,
-    builder: (context) => AlertDialog(
-      title: const Text("Update Server IP"),
-      content: TextField(
-        controller: ipController,
-        decoration: const InputDecoration(hintText: "e.g. 192.168.1.50"),
-      ),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
-        ElevatedButton(
-          onPressed: () {
-            setState(() => serverIp = ipController.text);
-            Navigator.pop(context);
-          },
-          child: const Text("Update"),
+  // 1. Revised IP Dialog
+  void _showChangeIpDialog() {
+    TextEditingController ipController = TextEditingController(text: serverIp);
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Update Server IP"),
+        content: TextField(
+          controller: ipController,
+          decoration: const InputDecoration(hintText: "e.g. 192.168.1.50"),
         ),
-      ],
-    ),
-  );
-}
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
+          ElevatedButton(
+            onPressed: () {
+              // STOP the timer immediately to prevent background sync
+              _refreshTimer?.cancel();
 
-// 2. Function to Change Admin Password (Logout and Re-verify)
-void _showChangePasswordDialog() {
-  setState(() {
-    isAdmin = false;
-    currentAdminPassword = "";
-  });
-  // This triggers your existing admin login logic automatically
-  ScaffoldMessenger.of(context).showSnackBar(
-    const SnackBar(content: Text("Admin logged out. Please enter new password.")),
-  );
+              setState(() {
+                serverIp = ipController.text;
+                // FULL RESET: This forces the build method to show _buildRoleSelection()
+                hasSelectedRole = false; 
+                loggedInUser = null; 
+                isAdmin = false;
+                tableAssignments = []; 
+              });
+
+              Navigator.pop(context); // Close dialog
+
+              // Restart the timer for the "Front Page" if needed, 
+              // or let the next login start it.
+              _refreshTimer = Timer.periodic(const Duration(seconds: 3), (t) => refreshLobby());
+            },
+            child: const Text("Update & Logout"),
+          ),
+        ],
+      ),
+    );
   }
+
+  // 2. Revised Password Dialog
+  void _showChangePasswordDialog() {
+    TextEditingController passController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Update Admin Password"),
+        content: TextField(
+          controller: passController,
+          obscureText: true,
+          decoration: const InputDecoration(hintText: "Enter new password"),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
+          ElevatedButton(
+            onPressed: () async {
+              final newPass = passController.text;
+              if (newPass.isNotEmpty) {
+                await _sendPasswordUpdateToServer(newPass);
+                
+                // STOP the timer immediately
+                _refreshTimer?.cancel();
+
+                setState(() {
+                  // FULL RESET to trigger _buildRoleSelection()
+                  hasSelectedRole = false;
+                  isAdmin = false;
+                  loggedInUser = null; 
+                  tableAssignments = []; 
+                  currentAdminPassword = ""; 
+                });
+
+                Navigator.pop(context); // Close dialog
+                
+                // Restart timer for the fresh session
+                _refreshTimer = Timer.periodic(const Duration(seconds: 3), (t) => refreshLobby());
+
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text("Password updated. Returning to Main Page.")),
+                );
+              }
+            },
+            child: const Text("Update & Logout"),
+          ),
+        ],
+      ),
+    );
+  }
+
   // --- API CALLS ---
+
+Future<void> _sendPasswordUpdateToServer(String newPass) async {
+  final url = Uri.parse('http://$serverIp:8080/update-password');
+  
+  try {
+    final response = await http.post(
+      url,
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'newPassword': newPass}),
+    );
+
+    if (response.statusCode == 200) {
+      print("Server password updated successfully.");
+    } else {
+      print("Failed to update server password: ${response.body}");
+    }
+  } catch (e) {
+    print("Error communicating with server: $e");
+  }
+}
 
   Future<void> downloadReport() async {
   final response = await http.get(Uri.parse('http://$serverIp:8080/export'));
@@ -129,6 +203,7 @@ void _showChangePasswordDialog() {
     }
   }
   Future<void> refreshLobby() async {
+    if (!hasSelectedRole) return; // Don't refresh if we're on the role selection screen
   try {
     final pRes = await http.get(Uri.parse('http://$serverIp:8080/players'));
     final sRes = await http.get(Uri.parse('http://$serverIp:8080/status'));
@@ -312,7 +387,7 @@ void _showAdminPasswordDialog() {
       content: TextField(
         obscureText: true,
         onChanged: (v) => enteredPass = v,
-        decoration: const InputDecoration(hintText: "Server Password"),
+        decoration: const InputDecoration(hintText: "admin123"),
       ),
       actions: [
         ElevatedButton(
@@ -415,20 +490,41 @@ void _showAdminPasswordDialog() {
       children: [
         // Only show these to the Admin
         if (isAdmin) ...[
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Card(
-              child: ListTile(
-                leading: const Icon(Icons.repeat),
-                title: TextField(
-                  controller: _roundsController,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: "Set Total Rounds"),
-                ),
+         Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Card(
+            child: ListTile(
+              leading: const Icon(Icons.repeat, color: Colors.blue),
+              title: TextField(
+                controller: _roundsController,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: "Set Total Rounds"),
               ),
             ),
           ),
-        ],
+        ),
+
+        // NEW: Utility buttons 
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              TextButton.icon(
+                onPressed: _showChangeIpDialog,
+                icon: const Icon(Icons.edit_location_alt, size: 18),
+                label: const Text("Change IP"),
+              ),
+              TextButton.icon(
+                    onPressed: _showChangePasswordDialog,
+                    icon: const Icon(Icons.lock_open, color: Colors.orange),
+                    label: const Text("New Password", style: TextStyle(color: Colors.orange)),
+              ),
+            ],
+          ),
+        ),
+        const Divider(),
+      ],
 
         const Padding(
           padding: EdgeInsets.symmetric(vertical: 10),
@@ -454,27 +550,6 @@ void _showAdminPasswordDialog() {
                 ),
               );
             },
-          ),
-        ),
-
-        // NEW UTILITY BUTTONS SECTION
-        const Divider(),
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              TextButton.icon(
-                onPressed: _showChangeIpDialog,
-                icon: const Icon(Icons.edit_location_alt, size: 20, color: Colors.blue),
-                label: const Text("Change IP", style: TextStyle(color: Colors.blue)),
-              ),
-              TextButton.icon(
-                onPressed: _showChangePasswordDialog,
-                icon: const Icon(Icons.lock_open, size: 20, color: Colors.orange),
-                label: const Text("New Password", style: TextStyle(color: Colors.orange)),
-              ),
-            ],
           ),
         ),
       ],

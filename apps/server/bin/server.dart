@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'package:shelf/shelf.dart';
 import 'package:shelf/shelf_io.dart' as io;
 import 'package:shelf_router/shelf_router.dart';
-import 'package:dotenv/dotenv.dart';
+//import 'package:dotenv/dotenv.dart';
 
 List<Map<String, dynamic>> players = [];
 List<Map<String, dynamic>> currentAssignments = [];
@@ -10,6 +10,7 @@ List<Map<String, dynamic>> gameHistory = [];
 int currentRound = 0;
 int maxRounds = 3; 
 bool tournamentFinished = false;
+String admin_pass = 'admin123';
 
 Handler _addCorsHeaders(Handler handler) {
   return (Request request) async {
@@ -27,8 +28,28 @@ Handler _addCorsHeaders(Handler handler) {
 
 void main() async {
   final router = Router();
-  var env = DotEnv()..load(); // This reads the .env file automatically
-  final String admin_pass = env['ADMIN_PASS'] ?? 'default';
+  /*var env = DotEnv()..load(); // This reads the .env file automatically
+  final String admin_pass = env['ADMIN_PASS'] ?? 'default';*/
+
+  router.post('/update-password', (Request request) async {
+    final data = jsonDecode(await request.readAsString());
+    
+    // We update the global variable above
+    admin_pass = data['newPassword']; 
+    
+    print("Password updated to: $admin_pass");
+    return Response.ok(jsonEncode({'status': 'success'}));
+  });
+
+  router.post('/verify-admin', (Request request) async {
+    final data = jsonDecode(await request.readAsString());
+    
+    // Stricly check against the variable 'admin_pass'
+    if (data['password'] == admin_pass) {
+      return Response.ok(jsonEncode({'auth': true}));
+    }
+    return Response(401, body: jsonEncode({'auth': false}));
+    });
 
   router.post('/join', (Request request) async {
     final data = jsonDecode(await request.readAsString());
