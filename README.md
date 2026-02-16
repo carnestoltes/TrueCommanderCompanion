@@ -10,31 +10,19 @@ Fair assignment of manage for tournament in multipalyer commander
 ## High Level Architecture
 
 ```bash
-commander_event_tournament/
+TrueCommanderCompanion/
 │
-├──lib/
-│   ├── domain/
-│   │   ├── player.dart
-│   │   ├── table.dart
-│   │   ├── match.dart
-│   │   ├── round.dart
-│   │   ├── tournament.dart
-│   │   └── rule.dart
-│   │
-│   ├── services/
-│   │    ├── swiss_pairing_service.dart
-│   │    ├── scoring_service.dart
-│   │    ├── rule_assignment_service.dart
-│   │    ├── match_result_service.dart
-│   │    └── timer_service.dart
-│   │
+├──.dart_tool/
+│   ├── extension_discovery/
+│   │   └── vs_code.json
+│   │   
+│   ├── pub/
+│   │    └── workspace_ref.json
+│   │    
 │   ├── data/
 │   │    └── local_db.dart
 │   │
-│   ├── repositories/
-│   │    ├── player_repository.dart
-│   │    └── tournament_repository.dart
-│   │
+│   ├── package_config.json **
 │   ├── ui/
 │   ├── screens/
 │   │   ├── home_screen.dart
@@ -51,9 +39,11 @@ commander_event_tournament/
 │   │   ├── constants.dart
 │   │   └── helpers.dart
 │   └── main.dart
-│
+├──.gitignore
+├──LICENSE
+├── pubspec.lock
 ├── pubspec.yaml
-└── android/
+└── README
 ```
 
 # Features
