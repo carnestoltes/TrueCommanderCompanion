@@ -1,6 +1,12 @@
 # TrueCommanderCompanion
 Fair assignment of manage for tournament in multipalyer commander
 
+## Blog
+[https://sites.google.com/view/magicbedh]
+
+## Rules in Spanish
+[https://drive.google.com/file/d/1JR_MFuC7W1gXlIDCWRgXho9N8UAkhSFv/view]
+
 ## High Level Architecture
 
 ```bash
@@ -99,6 +105,21 @@ The order of assignment the tables use reverse order but still respecfully with 
 
 **Complexity in the worst case: O(n^2)**
 
+## SoS (Strengh of Schedule)
+
+In tournament software (especially for games like Magic: The Gathering, Chess, or Warhammer), SoS stands for Strength of Schedule.
+
+It is the most common tie-breaker used to rank players who have the same number of total points.
+How it works
+
+If you and another player both have 9 points, the computer needs a way to decide who is "#1" and who is "#2." It looks at the opponents you played against:
+
+    High SoS: You played against "strong" opponents (players who won most of their other matches).
+
+    Low SoS: You played against "weak" opponents (players who lost most of their other matches).
+
+The logic is that it is harder to earn 9 points against pro players than it is to earn 9 points against beginners. Therefore, the person with the higher SoS wins the tie-breaker.
+
 ## Rule Assignment
 ### Motivation
 The point is reaching the way to break the tie in a way fairness and not suggested for early abuse playing around it.
@@ -132,20 +153,8 @@ This rules applies the logical of count a buch of permanents in your board *excl
 
 Account for number of entites could produce mana like, mana rocks, mana dorks ...
 
-### Number of Cards Remaining in decks
-
-Keep simple, the player has a less number of cards remainding in his library lose the round.
-
-### Devotion to your commander
-
-Still working but, the meaning of this rule focus on the number of simbols in board associated with your commander, so the player has more devotion wins the round.
-
-# Collaboration
+## Collaboration
 *In this section i want to thank a person has gone to the care to develop a modality inside of Commander for make arrive everyone the posibility of a good experience agains others formats prioritizing the ingenuity versus stapples*
 
-## Rules in Spanish
-[https://drive.google.com/file/d/1JR_MFuC7W1gXlIDCWRgXho9N8UAkhSFv/view]
 
-## Blog
-[https://sites.google.com/view/magicbedh]
 
