@@ -17,7 +17,7 @@ class TournamentApp extends StatefulWidget {
 
 class _TournamentAppState extends State<TournamentApp> {
   // --- CONFIGURATION ---
-  final String serverIp = "192.168.1.14"; 
+  String serverIp = "192.168.1.14"; 
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _roundsController = TextEditingController(text: "3");
 
@@ -44,9 +44,7 @@ final List<String> _tieBreakRules = [
   "Commander Damage Inflicted",
   "Commander Damage Received",
   "Nº of Permanents [No lands/tokens]",
-  "Nº of Mana Sources",
-  "Number of Remaining Cards in Library",
-  "Devotion to your commander"
+  "Nº of Mana Sources"
 ];
 
   @override
@@ -63,6 +61,42 @@ final List<String> _tieBreakRules = [
     super.dispose();
   }
 
+  // 1. Function to Change Server IP
+void _showChangeIpDialog() {
+  TextEditingController ipController = TextEditingController(text: serverIp);
+  showDialog(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text("Update Server IP"),
+      content: TextField(
+        controller: ipController,
+        decoration: const InputDecoration(hintText: "e.g. 192.168.1.50"),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
+        ElevatedButton(
+          onPressed: () {
+            setState(() => serverIp = ipController.text);
+            Navigator.pop(context);
+          },
+          child: const Text("Update"),
+        ),
+      ],
+    ),
+  );
+}
+
+// 2. Function to Change Admin Password (Logout and Re-verify)
+void _showChangePasswordDialog() {
+  setState(() {
+    isAdmin = false;
+    currentAdminPassword = "";
+  });
+  // This triggers your existing admin login logic automatically
+  ScaffoldMessenger.of(context).showSnackBar(
+    const SnackBar(content: Text("Admin logged out. Please enter new password.")),
+  );
+  }
   // --- API CALLS ---
 
   Future<void> downloadReport() async {
@@ -241,13 +275,8 @@ final List<String> _tieBreakRules = [
 }
 
   void _generateRandomRule() {
-  String newRule;
-  do {
-    newRule = _tieBreakRules[Random().nextInt(_tieBreakRules.length)];
-  } while (newRule == _selectedRule); // Keep rolling until it's a different one
-  
   setState(() {
-    _selectedRule = newRule;
+    _selectedRule = _tieBreakRules[Random().nextInt(_tieBreakRules.length)];
   });
 }
 
@@ -309,35 +338,6 @@ void _showAdminPasswordDialog() {
           child: const Text("Login"),
         )
       ],
-    ),
-  );
-}
-
-Widget _buildTieBreakButton() {
-  return Card(
-    color: Colors.red.shade50,
-    margin: const EdgeInsets.all(16),
-    child: Padding(
-      padding: const EdgeInsets.all(12.0),
-      child: Column(
-        children: [
-          const Text("ADMIN TIE-BREAKER TOOL", 
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.red)),
-          const SizedBox(height: 8),
-          Text(
-            _selectedRule ?? "No Rule Selected",
-            textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 10),
-          ElevatedButton.icon(
-            onPressed: _generateRandomRule,
-            icon: const Icon(Icons.casino),
-            label: const Text("Randomize Rule"),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
-          )
-        ],
-      ),
     ),
   );
 }
@@ -413,8 +413,8 @@ Widget _buildTieBreakButton() {
   if (tableAssignments.isEmpty) {
     return Column(
       children: [
-        if (isAdmin) 
-          _buildTieBreakButton(),
+        // Only show these to the Admin
+        if (isAdmin) ...[
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: Card(
@@ -428,10 +428,13 @@ Widget _buildTieBreakButton() {
               ),
             ),
           ),
+        ],
+
         const Padding(
           padding: EdgeInsets.symmetric(vertical: 10),
           child: Text("Waiting for Players...", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
         ),
+
         Expanded(
           child: ListView.builder(
             itemCount: players.length,
@@ -451,6 +454,27 @@ Widget _buildTieBreakButton() {
                 ),
               );
             },
+          ),
+        ),
+
+        // NEW UTILITY BUTTONS SECTION
+        const Divider(),
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              TextButton.icon(
+                onPressed: _showChangeIpDialog,
+                icon: const Icon(Icons.edit_location_alt, size: 20, color: Colors.blue),
+                label: const Text("Change IP", style: TextStyle(color: Colors.blue)),
+              ),
+              TextButton.icon(
+                onPressed: _showChangePasswordDialog,
+                icon: const Icon(Icons.lock_open, size: 20, color: Colors.orange),
+                label: const Text("New Password", style: TextStyle(color: Colors.orange)),
+              ),
+            ],
           ),
         ),
       ],
@@ -473,7 +497,25 @@ Widget _buildTieBreakButton() {
               title: Text("TABLE $tableNumber ($tableSize Players)", 
                 style: const TextStyle(fontWeight: FontWeight.bold)),
               tileColor: Colors.blueGrey.shade100,
+              // ADMIN ACTION: Roll rule for this specific round
+              trailing: isAdmin ? IconButton(
+                icon: const Icon(Icons.casino, color: Colors.blueGrey),
+                onPressed: _generateRandomRule,
+                tooltip: "Roll Tie-Breaker",
+              ) : null,
             ),
+            // TIE-BREAKER BANNER (Appears only after Admin clicks the casino icon)
+           if (_selectedRule != null)
+             Container(
+               width: double.infinity,
+               color: Colors.red.shade50,
+               padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+               child: Text(
+                 "TIE-BREAKER RULE: $_selectedRule",
+                 style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red.shade900),
+                 textAlign: TextAlign.center,
+               ),
+             ),
             ...table['players'].map<Widget>((pName) {
               bool isMe = pName == loggedInUser;
               bool alreadyReported = history.any((log) => 
@@ -481,7 +523,7 @@ Widget _buildTieBreakButton() {
               );
 
               return ListTile(
-                title: Text(isMe ? "$pName (YOU)" : pName, 
+                title: Text(isMe ? "$pName" : pName, 
                   style: TextStyle(
                     fontWeight: isMe ? FontWeight.bold : FontWeight.normal,
                     color: alreadyReported ? Colors.grey : Colors.black
