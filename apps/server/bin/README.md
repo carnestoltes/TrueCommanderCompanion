@@ -1,5 +1,7 @@
 # Description
 
+The server acts as a **RESTful State Machine.** It doesn't just store data; it calculates the tournament's progression.
+
 ## Key Endpoints
 
 |Endpoint|Method|Description|
