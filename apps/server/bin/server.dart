@@ -60,18 +60,53 @@ void main() async {
   });
 
   router.get('/players', (Request request) {
-    players.sort((a, b) {
-      num pA = a['points'] ?? 0.0;
-      num pB = b['points'] ?? 0.0;
-      int cmp = pB.compareTo(pA);
-      if (cmp == 0) {
-        num sA = a['sos'] ?? 0.0;
-        num sB = b['sos'] ?? 0.0;
-        return sB.compareTo(sA);
+  // 1. Calculate REAL SoS (Buchholz) for every player
+  for (var player in players) {
+    double sosScore = 0.0;
+    String name = player['name'];
+
+    // Find all rounds this player participated in
+    var myMatches = gameHistory.where((entry) => entry['player'] == name).toList();
+
+    for (var match in myMatches) {
+      int round = match['round'];
+      int table = match['table'];
+
+      // Find everyone else who was at the same table in that SAME round
+      var opponentsInMatch = gameHistory.where((entry) => 
+        entry['round'] == round && 
+        entry['table'] == table && 
+        entry['player'] != name
+      );
+
+      for (var opp in opponentsInMatch) {
+        // Find the opponent's CURRENT total points from the main list
+        var oppData = players.firstWhere(
+          (p) => p['name'] == opp['player'], 
+          orElse: () => {'points': 0.0}
+        );
+        sosScore += (oppData['points'] as num).toDouble();
       }
-      return cmp;
-    });
-    return Response.ok(jsonEncode(players));
+    }
+    // Store the calculated sum as the player's SoS
+    player['sos'] = sosScore;
+  }
+
+  // 2. Sort the list: Points first (Descending), then SoS (Descending)
+  players.sort((a, b) {
+    num pA = a['points'] ?? 0.0;
+    num pB = b['points'] ?? 0.0;
+    int cmp = pB.compareTo(pA); // Primary: Points
+    
+    if (cmp == 0) {
+      num sA = a['sos'] ?? 0.0;
+      num sB = b['sos'] ?? 0.0;
+      return sB.compareTo(sA); // Secondary: Strength of Schedule
+    }
+    return cmp;
+  });
+
+  return Response.ok(jsonEncode(players));
   });
 
   router.post('/undo', (Request request) async {
@@ -104,12 +139,6 @@ void main() async {
       }));
     }
     return Response.ok(jsonEncode({'status': 'waiting'}));
-  });
-
-  router.post('/verify-admin', (Request request) async {
-    final data = jsonDecode(await request.readAsString());
-    if (data['password'] == admin_pass) return Response.ok(jsonEncode({'auth': true}));
-    return Response(401, body: jsonEncode({'auth': false}));
   });
 
   router.get('/history', (Request request) => Response.ok(jsonEncode(gameHistory)));

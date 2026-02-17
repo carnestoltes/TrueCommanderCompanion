@@ -9,6 +9,19 @@ void main() => runApp(const MaterialApp(
       debugShowCheckedModeBanner: false,
     ));
 
+  Color _getRankColor(int rank) {
+    switch (rank) {
+      case 1: return Colors.amber.shade700;
+      case 2: return Colors.blueGrey.shade400;
+      case 3: return Colors.brown.shade400;
+      default: return Colors.grey.shade600;
+    }
+  }
+
+// ==========================================
+// 1. MAIN ENTRY & PLAYER VIEW
+// ==========================================
+
 class TournamentApp extends StatefulWidget {
   const TournamentApp({super.key});
   @override
@@ -57,7 +70,7 @@ final List<String> _tieBreakRules = [
   void dispose() {
     _refreshTimer?.cancel();
     _nameController.dispose();
-    _roundsController.dispose();
+    //_roundsController.dispose();
     super.dispose();
   }
 
@@ -203,7 +216,7 @@ Future<void> _sendPasswordUpdateToServer(String newPass) async {
     }
   }
   Future<void> refreshLobby() async {
-    if (!hasSelectedRole) return; // Don't refresh if we're on the role selection screen
+    //if (!hasSelectedRole) return; // Don't refresh if we're on the role selection screen
   try {
     final pRes = await http.get(Uri.parse('http://$serverIp:8080/players'));
     final sRes = await http.get(Uri.parse('http://$serverIp:8080/status'));
@@ -224,7 +237,7 @@ Future<void> _sendPasswordUpdateToServer(String newPass) async {
         if (statusData['status'] == 'started') {
           tableAssignments = statusData['assignments'];
           currentRound = statusData['round'] ?? 0;
-          maxRounds = statusData['maxRounds'] ?? 3;
+          //maxRounds = statusData['maxRounds'] ?? 3;
         } else if (statusData['status'] == 'waiting') {
           tableAssignments = []; // Clear tables if back in lobby
           isFinished = false;
@@ -481,71 +494,94 @@ void _showAdminPasswordDialog() {
   );
   }
 
- Widget _buildMainView() {
+Widget _buildMainView() {
   if (isFinished) return _buildPodiumView();
 
-  // 1. LOBBY VIEW
+  // 1. LOBBY VIEW (When no round is active)
   if (tableAssignments.isEmpty) {
+    // SORTING LOGIC: Points first, then SoS as tie-breaker
+    List<dynamic> sortedPlayers = List.from(players);
+    sortedPlayers.sort((a, b) {
+      num pA = a['points'] ?? 0;
+      num pB = b['points'] ?? 0;
+      int cmp = pB.compareTo(pA); // High points first
+      if (cmp == 0) {
+        // Tie-breaker: Higher SoS (Strength of Schedule) wins
+        num sosA = a['sos'] ?? 0;
+        num sosB = b['sos'] ?? 0;
+        return sosB.compareTo(sosA);
+      }
+      return cmp;
+    });
+
     return Column(
       children: [
-        // Only show these to the Admin
         if (isAdmin) ...[
-         Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Card(
-            child: ListTile(
-              leading: const Icon(Icons.repeat, color: Colors.blue),
-              title: TextField(
-                controller: _roundsController,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: "Set Total Rounds"),
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Card(
+              child: ListTile(
+                leading: const Icon(Icons.repeat, color: Colors.blue),
+                title: TextField(
+                  controller: _roundsController,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: "Set Total Rounds"),
+                ),
               ),
             ),
           ),
-        ),
-
-        // NEW: Utility buttons 
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              TextButton.icon(
-                onPressed: _showChangeIpDialog,
-                icon: const Icon(Icons.edit_location_alt, size: 18),
-                label: const Text("Change IP"),
-              ),
-              TextButton.icon(
-                    onPressed: _showChangePasswordDialog,
-                    icon: const Icon(Icons.lock_open, color: Colors.orange),
-                    label: const Text("New Password", style: TextStyle(color: Colors.orange)),
-              ),
-            ],
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                TextButton.icon(
+                  onPressed: _showChangeIpDialog,
+                  icon: const Icon(Icons.edit_location_alt, size: 18),
+                  label: const Text("Change IP"),
+                ),
+                TextButton.icon(
+                  onPressed: _showChangePasswordDialog,
+                  icon: const Icon(Icons.lock_open, color: Colors.orange),
+                  label: const Text("New Password", style: TextStyle(color: Colors.orange)),
+                ),
+              ],
+            ),
           ),
-        ),
-        const Divider(),
-      ],
+          const Divider(),
+        ],
 
         const Padding(
           padding: EdgeInsets.symmetric(vertical: 10),
-          child: Text("Waiting for Players...", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          child: Text("Tournament Standings", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
         ),
 
         Expanded(
           child: ListView.builder(
-            itemCount: players.length,
+            itemCount: sortedPlayers.length,
             itemBuilder: (context, i) {
-              bool isMe = players[i]['name'] == loggedInUser;
+              final p = sortedPlayers[i];
+              bool isMe = p['name'] == loggedInUser;
               return ListTile(
-                leading: Icon(Icons.account_circle, color: isMe ? Colors.blue : Colors.grey),
-                title: Text(players[i]['name'], 
+                leading: CircleAvatar(
+                  backgroundColor: i < 3 ? Colors.amber.shade100 : Colors.grey.shade200,
+                  child: Text("${i + 1}", style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                ),
+                title: Text(p['name'], 
                   style: TextStyle(fontWeight: isMe ? FontWeight.bold : FontWeight.normal)),
                 trailing: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    Text("${players[i]['points'].toString().replaceAll(RegExp(r'\.0$'), '')} pts", style: const TextStyle(fontWeight: FontWeight.bold)),
-                    Text("SoS: ${players[i]['sos'] ?? 0}", style: const TextStyle(fontSize: 10, color: Colors.grey)),
+                    Text(
+                      "${p['points'].toString().replaceAll(RegExp(r'\.0$'), '')} pts", 
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)
+                    ),
+                    // REAL SOS DISPLAY
+                    Text(
+                      "SoS: ${p['sos'] ?? 0}", 
+                      style: TextStyle(fontSize: 11, color: Colors.blueGrey.shade600, fontStyle: FontStyle.italic)
+                    ),
                   ],
                 ),
               );
@@ -556,12 +592,12 @@ void _showAdminPasswordDialog() {
     );
   }
 
- // 2. ACTIVE TABLES VIEW
+  // 2. ACTIVE TABLES VIEW (Same as your previous code)
   return ListView.builder(
     itemCount: tableAssignments.length,
     itemBuilder: (context, i) {
       var table = tableAssignments[i];
-      int tableNumber = table['table']; // Get the table ID
+      int tableNumber = table['table'];
       int tableSize = table['players'].length;
 
       return Card(
@@ -572,25 +608,23 @@ void _showAdminPasswordDialog() {
               title: Text("TABLE $tableNumber ($tableSize Players)", 
                 style: const TextStyle(fontWeight: FontWeight.bold)),
               tileColor: Colors.blueGrey.shade100,
-              // ADMIN ACTION: Roll rule for this specific round
               trailing: isAdmin ? IconButton(
                 icon: const Icon(Icons.casino, color: Colors.blueGrey),
                 onPressed: _generateRandomRule,
                 tooltip: "Roll Tie-Breaker",
               ) : null,
             ),
-            // TIE-BREAKER BANNER (Appears only after Admin clicks the casino icon)
-           if (_selectedRule != null)
-             Container(
-               width: double.infinity,
-               color: Colors.red.shade50,
-               padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-               child: Text(
-                 "TIE-BREAKER RULE: $_selectedRule",
-                 style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red.shade900),
-                 textAlign: TextAlign.center,
-               ),
-             ),
+            if (_selectedRule != null)
+              Container(
+                width: double.infinity,
+                color: Colors.red.shade50,
+                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                child: Text(
+                  "TIE-BREAKER RULE: $_selectedRule",
+                  style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red.shade900),
+                  textAlign: TextAlign.center,
+                ),
+              ),
             ...table['players'].map<Widget>((pName) {
               bool isMe = pName == loggedInUser;
               bool alreadyReported = history.any((log) => 
@@ -598,7 +632,7 @@ void _showAdminPasswordDialog() {
               );
 
               return ListTile(
-                title: Text(isMe ? "$pName" : pName, 
+                title: Text(isMe ? "$pName (You)" : pName, 
                   style: TextStyle(
                     fontWeight: isMe ? FontWeight.bold : FontWeight.normal,
                     color: alreadyReported ? Colors.grey : Colors.black
@@ -612,9 +646,8 @@ void _showAdminPasswordDialog() {
 
                     return scoringMap.entries.map((entry) {
                       int rank = entry.key;
-                      double points = entry.value;
+                      double pts = entry.value;
 
-                      // CHECK: Is this specific rank already taken at THIS table in THIS round?
                       bool isRankTaken = history.any((log) => 
                         log['table'] == tableNumber && 
                         log['round'] == currentRound && 
@@ -625,18 +658,16 @@ void _showAdminPasswordDialog() {
                         style: ElevatedButton.styleFrom(
                           minimumSize: const Size(40, 38),
                           padding: EdgeInsets.zero,
-                          // If rank is taken by someone else, turn it dark/grey
                           backgroundColor: alreadyReported 
                               ? Colors.grey 
                               : (isRankTaken ? Colors.black38 : _getRankColor(rank)),
                         ),
-                        // Disable button if player already reported OR if rank is already taken
                         onPressed: (alreadyReported || isRankTaken) 
                             ? null 
-                            : () => reportResult(pName, points, rank, tableNumber), // Pass rank and table!
+                            : () => reportResult(pName, pts, rank, tableNumber),
                         child: isRankTaken 
-                            ? const Icon(Icons.lock, size: 12, color: Colors.white70) // Show lock icon
-                            : Text("$rankº", style: const TextStyle(color: Colors.white, fontSize: 11)),// Remove bracers in rank ...
+                            ? const Icon(Icons.lock, size: 12, color: Colors.white70) 
+                            : Text("$rankº", style: const TextStyle(color: Colors.white, fontSize: 11)),
                       );
                     }).toList();
                   }(),
@@ -685,16 +716,6 @@ void _showAdminPasswordDialog() {
             )
           : null,
     );
-  }
-
-  // --- COPIED HELPERS FROM ORIGINAL ---
-  Color _getRankColor(int rank) {
-    switch (rank) {
-      case 1: return Colors.amber.shade700;
-      case 2: return Colors.blueGrey.shade400;
-      case 3: return Colors.brown.shade400;
-      default: return Colors.grey.shade600;
-    }
   }
 
   Widget _buildPodiumView() {
