@@ -1,5 +1,6 @@
-# TrueCommanderCompanion
-Fair assignment of manage for tournament in multipalyer commander
+# Commander BEDH Torunament Manager
+
+A full-stack tournament management system designed for Commander (EDH) pods. It features a Dart-based backend server and a Flutter mobile application for real-time table assignments, result reporting, and advanced tie-breaker calculations.
 
 ## Server Module
 
@@ -9,7 +10,15 @@ Fair assignment of manage for tournament in multipalyer commander
 
 [App Schedule](apps/true_commander/lib/README.md)
 
-## High Level Architecture Client/Server
+## System Architecture
+
+The system follows a Client-Server model over a Local Area Network (LAN).
+
+    Backend: A Dart server using the shelf package. It manages the global state (players, history, tables) in memory.
+
+    Frontend: A Flutter application with two distinct roles: Admin (controls the tournament flow) and Player (views assignments and rankings).
+    
+### High Level Architecture Client/Server
 
 ```bash
 TrueCommanderCompanion/
@@ -63,6 +72,36 @@ TrueCommanderCompanion/
 
 # Features
 
+**1. Dynamic Pod Assignment**
+
+The server automatically generates pods based on the total number of players:
+
+    Prioritizes 4-player pods.
+
+    Automatically creates 3-player pods if the total count isn't divisible by 4.
+
+**2. Real Strength of Schedule (SoS)**
+
+Unlike simple tie-breakers, this system uses the Buchholz System:
+
+    *Calculation:* A player's SoS is the sum of the current total points of every opponent they have faced.
+
+    *Why it works:* It rewards players who played against tougher opponents. If your Round 1 opponent goes on to win the whole tournament, your SoS increases automatically.
+
+**3. Admin Tools**
+
+    Update Server IP: Change connection settings without restarting the app.
+
+    Security: Admin actions are protected by a server-side password.
+
+    Undo System: Mistakenly reported results can be deleted, and points are automatically recalculated.
+
+## Deployment
+
+### Prerequisites
+    Dart SDK
+    Flutter SDK
+    
 ## Swiss Algorithm
 
 ### Design Rules
