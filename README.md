@@ -17,14 +17,14 @@ TrueCommanderCompanion/
 │   │   ├── bin/
 │   │   │    └── server.dart 
 │   │   ├── test/
-│   │   │    ├── 
-│   │   │    └── 
-│   │   ├── bin/
-│   │   ├── bin/
-│   │   ├── bin/
-│   │   ├── bin/
-│   │   ├── bin/
-│   │   └── vs_code.json   
+│   │   │    └── server_test.dart     
+│   │   ├── .dockignore
+│   │   ├── .gitignore
+│   │   ├── CHANGELOG
+│   │   ├── Dockerfile
+│   │   ├── README
+│   │   ├── analysis_options
+│   │   └── pubspec.yaml  
 │   │    
 │   ├── true_commander/
 │   │   ├── bin/
