@@ -4,19 +4,19 @@ A full-stack tournament management system designed for Commander (EDH) pods. It 
 
 ## Server Module
 
-[Server Schedule](apps/server/bin/README.md)
+* [Server Schedule](apps/server/bin/README.md)
 
 ## APP Module
 
-[App Schedule](apps/true_commander/lib/README.md)
+* [App Schedule](apps/true_commander/lib/README.md)
 
 ## System Architecture
 
 The system follows a Client-Server model over a Local Area Network (LAN).
 
-    Backend: A Dart server using the shelf package. It manages the global state (players, history, tables) in memory.
+**Backend:** A Dart server using the shelf package. It manages the global state (players, history, tables) in memory.
 
-    Frontend: A Flutter application with two distinct roles: Admin (controls the tournament flow) and Player (views assignments and rankings).
+**Frontend:** A Flutter application with two distinct roles: Admin (controls the tournament flow) and Player (views assignments and rankings).
     
 ### High Level Architecture Client/Server
 
@@ -76,31 +76,31 @@ TrueCommanderCompanion/
 
 The server automatically generates pods based on the total number of players:
 
-    Prioritizes 4-player pods.
+* Prioritizes 4-player pods.
 
-    Automatically creates 3-player pods if the total count isn't divisible by 4.
+* Automatically creates 3-player pods if the total count isn't divisible by 4.
 
 **2. Real Strength of Schedule (SoS)**
 
 Unlike simple tie-breakers, this system uses the Buchholz System:
 
-    *Calculation:* A player's SoS is the sum of the current total points of every opponent they have faced.
+*Calculation:* A player's SoS is the sum of the current total points of every opponent they have faced.
 
-    *Why it works:* It rewards players who played against tougher opponents. If your Round 1 opponent goes on to win the whole tournament, your SoS increases automatically.
+*Why it works:* It rewards players who played against tougher opponents. If your Round 1 opponent goes on to win the whole tournament, your SoS increases automatically.
 
 **3. Admin Tools**
 
-    Update Server IP: Change connection settings without restarting the app.
+__Update Server IP:__ Change connection settings without restarting the app.
 
-    Security: Admin actions are protected by a server-side password.
+__Security:__ Admin actions are protected by a server-side password.
 
-    Undo System: Mistakenly reported results can be deleted, and points are automatically recalculated.
+__Undo System:__ Mistakenly reported results can be deleted, and points are automatically recalculated.
 
 ## Deployment
 
 ### Prerequisites
-    Dart SDK
-    Flutter SDK
+* [Dart SDK](https://dart.dev/get-dart)
+* [Flutter SDK](https://docs.flutter.dev/install/quick)
     
 ## Swiss Algorithm
 
@@ -151,21 +151,23 @@ The order of assignment the tables use reverse order but still respecfully with 
 
 ## SoS (Strengh of Schedule)
 
-In tournament software (especially for games like Magic: The Gathering, Chess, or Warhammer), SoS stands for Strength of Schedule.
+In tournament software SoS stands for Strength of Schedule.
 
 It is the most common tie-breaker used to rank players who have the same number of total points.
-How it works
+
+How it works:
 
 If you and another player both have 9 points, the computer needs a way to decide who is "#1" and who is "#2." It looks at the opponents you played against:
 
-    High SoS: You played against "strong" opponents (players who won most of their other matches).
-
-    Low SoS: You played against "weak" opponents (players who lost most of their other matches).
+__High SoS:__ You played against "strong" opponents (players who won most of their other matches).
+__Low SoS:__ You played against "weak" opponents (players who lost most of their other matches).
 
 The logic is that it is harder to earn 9 points against pro players than it is to earn 9 points against beginners. Therefore, the person with the higher SoS wins the tie-breaker.
 
 ## Rule Assignment
+
 ### Motivation
+
 The point is reaching the way to break the tie in a way fairness and not suggested for early abuse playing around it.
 
 * The rule only assign when the admin in one of the round select the option.
