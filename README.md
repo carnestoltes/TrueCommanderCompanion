@@ -8,7 +8,7 @@ A full-stack tournament management system designed for Commander (EDH) pods. It 
 
 ## APP Module
 
-* [App Schedule](apps/true_commander/lib/README.md)
+* [App Schedule](apps/true_command/lib/README.md)
 
 ## System Architecture
 
