@@ -196,6 +196,10 @@ void main() async {
       maxRounds = data['maxRounds'] ?? maxRounds;
     }
 
+    if (currentRound == 0) {
+      players.shuffle();
+    }
+    
     if (currentRound >= maxRounds) {
       tournamentFinished = true;
       currentAssignments = []; 
@@ -249,7 +253,7 @@ void main() async {
     return Response.ok(jsonEncode({'status': 'reset'}));
   });
 
-  final handler = Pipeline().addMiddleware(logRequests()).addMiddleware(_addCorsHeaders).addHandler(router);
+  final handler = Pipeline().addMiddleware(logRequests()).addMiddleware(_addCorsHeaders).addHandler(router.call);
   await io.serve(handler, '0.0.0.0', 8080);
   print('TrueCommander Server running on port 8080');
 }

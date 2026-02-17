@@ -9,19 +9,6 @@ void main() => runApp(const MaterialApp(
       debugShowCheckedModeBanner: false,
     ));
 
-  Color _getRankColor(int rank) {
-    switch (rank) {
-      case 1: return Colors.amber.shade700;
-      case 2: return Colors.blueGrey.shade400;
-      case 3: return Colors.brown.shade400;
-      default: return Colors.grey.shade600;
-    }
-  }
-
-// ==========================================
-// 1. MAIN ENTRY & PLAYER VIEW
-// ==========================================
-
 class TournamentApp extends StatefulWidget {
   const TournamentApp({super.key});
   @override
@@ -164,6 +151,33 @@ final List<String> _tieBreakRules = [
     );
   }
 
+void _confirmReset() {
+  showDialog(
+    context: context,
+    builder: (BuildContext context) {
+      return AlertDialog(
+        title: const Text("Reset Tournament?"),
+        content: const Text(
+          "This will permanently delete all players, scores, and match history. Are you sure you want to proceed?"
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context), // Close dialog
+            child: const Text("CANCEL"),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () {
+              Navigator.pop(context); // Close dialog
+              resetTournament();     // Execute the reset
+            },
+            child: const Text("RESET ALL", style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      );
+    },
+  );
+}
   // --- API CALLS ---
 
 Future<void> _sendPasswordUpdateToServer(String newPass) async {
@@ -266,8 +280,9 @@ Future<void> _sendPasswordUpdateToServer(String newPass) async {
   Future<void> reportResult(String pName, num points, int rank, int tableId) async {
   // Determine rank based on points for the history log
   int rank;
-  if (points == 4) rank = 1;
-  else if (points == 3 || points == 2.5) rank = 2;
+  if (points == 4) {
+    rank = 1;
+  } else if (points == 3 || points == 2.5) rank = 2;
   else if (points == 2) rank = 3;
   else rank = 4;
 
@@ -328,15 +343,34 @@ Future<void> _sendPasswordUpdateToServer(String newPass) async {
   }
   }
 
-  Future<void> resetTournament() async {
-    await http.get(Uri.parse('http://$serverIp:8080/reset'));
-    setState(() {
-      tableAssignments = [];
-      isFinished = false;
-      currentRound = 0;
-    });
-    refreshLobby();
+ Future<void> resetTournament() async {
+  try {
+    final response = await http.get(Uri.parse('http://$serverIp:8080/reset'));
+    
+    if (response.statusCode == 200) {
+      setState(() {
+        tableAssignments = [];
+        players = []; // Clear local players
+        history = []; // Clear local history
+        isFinished = false;
+        currentRound = 0;
+      });
+      
+      refreshLobby();
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Tournament reset successfully"),
+          backgroundColor: Colors.green,
+        ),
+      );
+    }
+  } catch (e) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("Error: Could not reach server")),
+    );
   }
+}
 
   Future<void> deleteHistoryEntry(Map<String, dynamic> entry) async {
   try {
@@ -389,6 +423,16 @@ void _confirmDeleteEntry(dynamic log) {
     ),
   );
 }
+
+ Color _getRankColor(int rank) {
+    switch (rank) {
+      case 1: return Colors.amber.shade700;
+      case 2: return Colors.blueGrey.shade400;
+      case 3: return Colors.brown.shade400;
+      default: return Colors.grey.shade600;
+    }
+  }
+
   // --- UI SCREENS ---
 
 void _showAdminPasswordDialog() {
@@ -563,10 +607,6 @@ Widget _buildMainView() {
               final p = sortedPlayers[i];
               bool isMe = p['name'] == loggedInUser;
               return ListTile(
-                leading: CircleAvatar(
-                  backgroundColor: i < 3 ? Colors.amber.shade100 : Colors.grey.shade200,
-                  child: Text("${i + 1}", style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                ),
                 title: Text(p['name'], 
                   style: TextStyle(fontWeight: isMe ? FontWeight.bold : FontWeight.normal)),
                 trailing: Column(
@@ -632,7 +672,7 @@ Widget _buildMainView() {
               );
 
               return ListTile(
-                title: Text(isMe ? "$pName (You)" : pName, 
+                title: Text(isMe ? "$pName" : pName, 
                   style: TextStyle(
                     fontWeight: isMe ? FontWeight.bold : FontWeight.normal,
                     color: alreadyReported ? Colors.grey : Colors.black
@@ -696,7 +736,7 @@ Widget _buildMainView() {
           onPressed: () => setState(() => hasSelectedRole = false),
         ),
         actions: [
-          if (isAdmin) IconButton(icon: const Icon(Icons.delete_forever), onPressed: resetTournament),
+          if (isAdmin) IconButton(icon: const Icon(Icons.delete_forever), onPressed: _confirmReset),
         ],
       ),
       body: _currentIndex == 0 ? _buildMainView() : _buildHistoryView(),
