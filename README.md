@@ -14,24 +14,24 @@ TrueCommanderCompanion/
 │
 ├──apps/
 │   ├── server/
-|   |   ├── bin/
-|   |   |    └── server.dart 
-|   |   ├── test/
-|   |   |    ├── 
-|   |   |    └── 
-|   |   ├── bin/
-|   |   ├── bin/
-|   |   ├── bin/
-|   |   ├── bin/
-|   |   ├── bin/
+│   │   ├── bin/
+│   │   |    └── server.dart 
+│   │   ├── test/
+│   │   |    ├── 
+│   │   |    └── 
+│   │   ├── bin/
+│   │   ├── bin/
+│   │   ├── bin/
+│   │   ├── bin/
+│   │   ├── bin/
 │   │   └── vs_code.json   
 │   │    
 │   ├── true_commander/
-|   |   ├── bin/
+│   │   ├── bin/
 │   │   └── local_db.dart
 │   │
-│   |
-│   |
+│   │
+│   │
 │   |
 │   │   
 │   │   
@@ -39,7 +39,7 @@ TrueCommanderCompanion/
 │   │   
 │   
 ├──packages/
-|    └── shared_logic/
+│    └── shared_logic/
 ├──.gitignore
 ├──LICENSE
 ├── pubspec.lock
