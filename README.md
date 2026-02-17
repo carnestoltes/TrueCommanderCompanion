@@ -1,57 +1,107 @@
-# TrueCommanderCompanion
-Fair assignment of manage for tournament in multipalyer commander
+# Commander BEDH Torunament Manager
 
-## High Level Architecture
+A full-stack tournament management system designed for Commander (EDH) pods. It features a Dart-based backend server and a Flutter mobile application for real-time table assignments, result reporting, and advanced tie-breaker calculations.
+
+## Server Module
+
+* [Server Schedule](apps/server/bin/README.md)
+
+## APP Module
+
+* [App Schedule](apps/true_command/lib/README.md)
+
+## System Architecture
+
+The system follows a Client-Server model over a Local Area Network (LAN).
+
+**Backend:** A Dart server using the shelf package. It manages the global state (players, history, tables) in memory.
+
+**Frontend:** A Flutter application with two distinct roles: Admin (controls the tournament flow) and Player (views assignments and rankings).
+    
+### High Level Architecture Client/Server
 
 ```bash
-commander_event_tournament/
+TrueCommanderCompanion/
 │
-├──lib/
-│   ├── domain/
-│   │   ├── player.dart
-│   │   ├── table.dart
-│   │   ├── match.dart
-│   │   ├── round.dart
-│   │   ├── tournament.dart
-│   │   └── rule.dart
+├──apps/
+│   ├── server/
+│   │   ├── bin/
+│   │   │    └── server.dart 
+│   │   ├── test/
+│   │   │    └── server_test.dart     
+│   │   ├── .dockerignore
+│   │   ├── .gitignore
+│   │   ├── CHANGELOG.md
+│   │   ├── Dockerfile
+│   │   ├── README.md
+│   │   ├── analysis_options.yaml
+│   │   └── pubspec.yaml  
+│   │    
+│   ├── true_commander/
+│   │   ├── android/
+│   │   ├── assets/
+│   │   ├── ios/
+│   │   ├── lib/
+│   │   │   ├── lobby_screen.dart
+│   │   │   └── main.dart
+│   │   ├── linux/
+│   │   ├── macos/
+│   │   ├── test/
+│   │   ├── web/
+│   │   ├── windows/
+│   │   ├── .gitignore
+│   │   ├── .metadata
+│   │   ├── LICENSE
+│   │   ├── README.md
+│   │   ├── analysis_options.yaml
+│   │   └── pubspec.yaml 
 │   │
-│   ├── services/
-│   │    ├── swiss_pairing_service.dart
-│   │    ├── scoring_service.dart
-│   │    ├── rule_assignment_service.dart
-│   │    ├── match_result_service.dart
-│   │    └── timer_service.dart
-│   │
-│   ├── data/
-│   │    └── local_db.dart
-│   │
-│   ├── repositories/
-│   │    ├── player_repository.dart
-│   │    └── tournament_repository.dart
-│   │
-│   ├── ui/
-│   ├── screens/
-│   │   ├── home_screen.dart
-│   │   ├── tournament_screen.dart
-│   │   ├── round_screen.dart
-│   │   └── standings_screen.dart
-│   │
-│   └── widgets/
-│   │   ├── player_tile.dart
-│   │   ├── table_card.dart
-│   │   └── timer_widget.dart
-│   │
-│   ├── utils/
-│   │   ├── constants.dart
-│   │   └── helpers.dart
-│   └── main.dart
-│
+├──packages/shared_logic
+│   └── lib/
+│   │   ├── domain/
+│   │   │     ├── player.dart
+│   │   │     └── table.dart
+│   │   └── services/
+│   │   │     └── swiss_pairing_service.dart
+├──.gitignore
+├──LICENSE
+├── pubspec.lock
 ├── pubspec.yaml
-└── android/
+└── README
 ```
 
 # Features
 
+**1. Dynamic Pod Assignment**
+
+The server automatically generates pods based on the total number of players:
+
+* Prioritizes 4-player pods.
+
+* Automatically creates 3-player pods if the total count isn't divisible by 4.
+
+**2. Real Strength of Schedule (SoS)**
+
+Unlike simple tie-breakers, this system uses the Buchholz System:
+
+*Calculation:* A player's SoS is the sum of the current total points of every opponent they have faced.
+
+*Why it works:* It rewards players who played against tougher opponents. If your Round 1 opponent goes on to win the whole tournament, your SoS increases automatically.
+
+**3. Admin Tools**
+
+__Update Server IP:__ Change connection settings without restarting the app.
+
+__Security:__ Admin actions are protected by a server-side password.
+
+__Undo System:__ Mistakenly reported results can be deleted, and points are automatically recalculated.
+
+## Deployment
+
+### Prerequisites
+* [Dart SDK](https://dart.dev/get-dart)
+* [Flutter SDK](https://docs.flutter.dev/install/quick)
+    
 ## Swiss Algorithm
 
 ### Design Rules
@@ -99,14 +149,31 @@ The order of assignment the tables use reverse order but still respecfully with 
 
 **Complexity in the worst case: O(n^2)**
 
+## SoS (Strengh of Schedule)
+
+In tournament software SoS stands for Strength of Schedule.
+
+It is the most common tie-breaker used to rank players who have the same number of total points.
+
+How it works:
+
+If you and another player both have 9 points, the computer needs a way to decide who is "#1" and who is "#2." It looks at the opponents you played against:
+
+__High SoS:__ You played against "strong" opponents (players who won most of their other matches).
+
+__Low SoS:__ You played against "weak" opponents (players who lost most of their other matches).
+
+The logic is that it is harder to earn 9 points against pro players than it is to earn 9 points against beginners. Therefore, the person with the higher SoS wins the tie-breaker.
+
 ## Rule Assignment
+
 ### Motivation
+
 The point is reaching the way to break the tie in a way fairness and not suggested for early abuse playing around it.
 
-* Rule are not visible at the beggining of each round
-* The rule only assign when the timer ends or the user click on "See rule"
+* The rule only assign when the admin in one of the round select the option.
 
-For improve the experience in game and trying to minimize the role playing around this rules, i will extend and implement an 8 specific rules obtaining as result a probability of 12,5% equally. The presentation of tiebreaker rules are show below:
+For improve the experience in game and trying to minimize the role playing around this rules, i will extend and implement a 6 specific rules obtaining as result a probability of 16,6% equally. The presentation of tiebreaker rules are show below:
 
 ### Total Life
 
@@ -132,20 +199,14 @@ This rules applies the logical of count a buch of permanents in your board *excl
 
 Account for number of entites could produce mana like, mana rocks, mana dorks ...
 
-### Number of Cards Remaining in decks
-
-Keep simple, the player has a less number of cards remainding in his library lose the round.
-
-### Devotion to your commander
-
-Still working but, the meaning of this rule focus on the number of simbols in board associated with your commander, so the player has more devotion wins the round.
-
-# Collaboration
-*In this section i want to thank a person has gone to the care to develop a modality inside of Commander for make arrive everyone the posibility of a good experience agains others formats prioritizing the ingenuity versus stapples*
+## Blog
+[https://sites.google.com/view/magicbedh]
 
 ## Rules in Spanish
 [https://drive.google.com/file/d/1JR_MFuC7W1gXlIDCWRgXho9N8UAkhSFv/view]
 
-## Blog
-[https://sites.google.com/view/magicbedh]
+## Collaboration
+*In this section i want to thank a person has gone to the care to develop a modality inside of Commander for make arrive everyone the posibility of a good experience agains others formats prioritizing the ingenuity versus stapples*
+
+
 
