@@ -14,3 +14,8 @@
 * verify-admin
 
 ## Dependencies
+
+dart:convert
+package:shelf/shelf.dart
+package:shelf/shelf_io.dart
+package:shelf/shelf_router.dart
