@@ -160,6 +160,7 @@ How it works:
 If you and another player both have 9 points, the computer needs a way to decide who is "#1" and who is "#2." It looks at the opponents you played against:
 
 __High SoS:__ You played against "strong" opponents (players who won most of their other matches).
+
 __Low SoS:__ You played against "weak" opponents (players who lost most of their other matches).
 
 The logic is that it is harder to earn 9 points against pro players than it is to earn 9 points against beginners. Therefore, the person with the higher SoS wins the tie-breaker.
