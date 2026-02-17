@@ -3,6 +3,8 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:async';
 import 'dart:math';
+import 'package:qr_flutter/qr_flutter.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
 
 void main() => runApp(const MaterialApp(
       home: TournamentApp(),
@@ -17,7 +19,8 @@ class TournamentApp extends StatefulWidget {
 
 class _TournamentAppState extends State<TournamentApp> {
   // --- CONFIGURATION ---
-  String serverIp = "192.168.1.14"; 
+  String serverIp = "192.168.1.14";
+  String serverPort = "5000"; 
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _roundsController = TextEditingController(text: "3");
 
@@ -178,6 +181,29 @@ void _confirmReset() {
     },
   );
 }
+
+void _showJoinQR() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Scan to Join"),
+        content: SizedBox(
+          width: 250,
+          height: 250,
+          child: Center(
+            child: QrImageView(
+              data: "http:$serverIp:$serverPort/join",
+              version: QrVersions.auto,
+              size: 200.0,
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Close"))
+        ],
+      ),
+    );
+  }
   // --- API CALLS ---
 
 Future<void> _sendPasswordUpdateToServer(String newPass) async {
@@ -396,6 +422,24 @@ Future<void> _sendPasswordUpdateToServer(String newPass) async {
   }
 }
 
+/*Future<void> _scanJoinCode() async {
+  // We navigate to a new screen that handles the camera
+  final String? code = await Navigator.push(
+    context, 
+    MaterialPageRoute(builder: (context) => const QRScannerPage())
+  );
+
+  if (code != null && code.startsWith("BEDH:")) {
+    String scannedIp = code.substring(5); // Extract IP from "BEDH:192.168.1.14"
+    setState(() {
+      serverIp = scannedIp;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text("Connected to $serverIp"), backgroundColor: Colors.green),
+    );
+  }
+}*/
+
   void _generateRandomRule() {
   setState(() {
     _selectedRule = _tieBreakRules[Random().nextInt(_tieBreakRules.length)];
@@ -510,15 +554,15 @@ void _showAdminPasswordDialog() {
                 ),
               ),
               const SizedBox(height: 12),
-              
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: joinTournament,
-                  child: const Text("Join as Player"),
-                ),
-              ),
-              const SizedBox(height: 20),
+
+              const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: joinTournament,
+                      child: const Text("Join as Player"),
+                    ),
+                  ),
               
               const Text("OR"),
               
@@ -584,6 +628,11 @@ Widget _buildMainView() {
                   icon: const Icon(Icons.edit_location_alt, size: 18),
                   label: const Text("Change IP"),
                 ),
+                TextButton.icon(
+                    onPressed: _showJoinQR, // <--- Calls your show function
+                    icon: const Icon(Icons.qr_code, color: Colors.blue),
+                    label: const Text("Show QR", style: TextStyle(color: Colors.blue)),
+                  ),
                 TextButton.icon(
                   onPressed: _showChangePasswordDialog,
                   icon: const Icon(Icons.lock_open, color: Colors.orange),
@@ -823,5 +872,32 @@ Widget _buildMainView() {
       );
     },
   ); 
+  }
+}
+// --- PLACE THIS AT THE VERY END OF YOUR FILE ---
+
+class QRScannerPage extends StatelessWidget {
+  const QRScannerPage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Scan Tournament Code'),
+        backgroundColor: Colors.blueGrey,
+      ),
+      body: MobileScanner(
+        onDetect: (capture) {
+          final List<Barcode> barcodes = capture.barcodes;
+          for (final barcode in barcodes) {
+            if (barcode.rawValue != null) {
+              // This sends the text from the QR back to the _scanJoinCode function
+              Navigator.pop(context, barcode.rawValue); 
+              break;
+            }
+          }
+        },
+      ),
+    );
   }
 }

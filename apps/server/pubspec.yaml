@@ -11,6 +11,8 @@ dependencies:
   shelf: ^1.4.2
   shelf_router: ^1.1.2
   dotenv: ^4.2.0
+  qr_flutter: ^4.1.0
+  mobile_scanner: ^7.1.4
   shared_logic:
     path: ../../packages/shared_logic # This link is vital!
 
