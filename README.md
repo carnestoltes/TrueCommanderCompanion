@@ -2,9 +2,13 @@
 Fair assignment of manage for tournament in multipalyer commander
 
 ## Server Module
-* [Server Schedule](apps/server/bin/README.md)
+
+[Server Schedule](apps/server/bin/README.md)
+
 ## APP Module
-* [App Schedule](apps/true_commander/lib/README.md)
+
+[App Schedule](apps/true_commander/lib/README.md)
+
 ## High Level Architecture Client/Server
 
 ```bash
