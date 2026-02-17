@@ -7,7 +7,7 @@ Fair assignment of manage for tournament in multipalyer commander
 ## Rules in Spanish
 [https://drive.google.com/file/d/1JR_MFuC7W1gXlIDCWRgXho9N8UAkhSFv/view]
 
-## High Level Architecture
+## High Level Architecture Client/Server
 
 ```bash
 TrueCommanderCompanion/
@@ -18,28 +18,40 @@ TrueCommanderCompanion/
 │   │   │    └── server.dart 
 │   │   ├── test/
 │   │   │    └── server_test.dart     
-│   │   ├── .dockignore
+│   │   ├── .dockerignore
 │   │   ├── .gitignore
-│   │   ├── CHANGELOG
+│   │   ├── CHANGELOG.md
 │   │   ├── Dockerfile
-│   │   ├── README
-│   │   ├── analysis_options
+│   │   ├── README.md
+│   │   ├── analysis_options.yaml
 │   │   └── pubspec.yaml  
 │   │    
 │   ├── true_commander/
-│   │   ├── bin/
-│   │   └── local_db.dart
+│   │   ├── android/
+│   │   ├── assets/
+│   │   ├── ios/
+│   │   ├── lib/
+│   │   |   ├── lobby_screen.dart
+│   │   |   └── main.dart
+│   │   ├── linux/
+│   │   ├── macos/
+│   │   ├── test/
+│   │   ├── web/
+│   │   ├── windows/
+│   │   ├── .gitignore
+│   │   ├── .metadata
+│   │   ├── LICENSE
+│   │   ├── README.md
+│   │   ├── analysis_options.yaml
+│   │   └── pubspec.yaml 
 │   │
-│   │
-│   │
-│   │
-│   │   
-│   │   
-│   │   
-│   │   
-│   
-├──packages/
-│    └── shared_logic/
+├──packages/shared_logic
+│   └── lib/
+│   │   ├── domain/
+│   │   │     ├── player.dart
+│   │   │     └── table.dart
+│   │   └── services/
+│   │   │     └── swiss_pairing_service.dart
 ├──.gitignore
 ├──LICENSE
 ├── pubspec.lock
@@ -115,10 +127,9 @@ The logic is that it is harder to earn 9 points against pro players than it is t
 ### Motivation
 The point is reaching the way to break the tie in a way fairness and not suggested for early abuse playing around it.
 
-* Rule are not visible at the beggining of each round
-* The rule only assign when the timer ends or the user click on "See rule"
+* The rule only assign when the admin in one of the round select the option.
 
-For improve the experience in game and trying to minimize the role playing around this rules, i will extend and implement an 8 specific rules obtaining as result a probability of 12,5% equally. The presentation of tiebreaker rules are show below:
+For improve the experience in game and trying to minimize the role playing around this rules, i will extend and implement a 6 specific rules obtaining as result a probability of 16,6% equally. The presentation of tiebreaker rules are show below:
 
 ### Total Life
 
