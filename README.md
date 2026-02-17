@@ -33,8 +33,8 @@ TrueCommanderCompanion/
 │   │   ├── assets/
 │   │   ├── ios/
 │   │   ├── lib/
-│   │   |   ├── lobby_screen.dart
-│   │   |   └── main.dart
+│   │   │   ├── lobby_screen.dart
+│   │   │   └── main.dart
 │   │   ├── linux/
 │   │   ├── macos/
 │   │   ├── test/
