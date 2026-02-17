@@ -1,10 +1,10 @@
 # TrueCommanderCompanion
 Fair assignment of manage for tournament in multipalyer commander
 
-## API Server
-[TrueCommanderCompanion/apps/server/bin/README.md](Server Module)
-## APP Schedule
-[TrueCommanderCompanion/apps/true_commander/lib/README.md](Application Module)
+## Server Module
+[Server Schedule](apps/server/bin/README.md)
+## APP Module
+[App Schedule](apps/true_commander/lib/README.md)
 ## High Level Architecture Client/Server
 
 ```bash
