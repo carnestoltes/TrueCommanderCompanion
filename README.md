@@ -15,10 +15,10 @@ TrueCommanderCompanion/
 ├──apps/
 │   ├── server/
 │   │   ├── bin/
-│   │   |    └── server.dart 
+│   │   │    └── server.dart 
 │   │   ├── test/
-│   │   |    ├── 
-│   │   |    └── 
+│   │   │    ├── 
+│   │   │    └── 
 │   │   ├── bin/
 │   │   ├── bin/
 │   │   ├── bin/
@@ -32,7 +32,7 @@ TrueCommanderCompanion/
 │   │
 │   │
 │   │
-│   |
+│   │
 │   │   
 │   │   
 │   │   
