@@ -12,33 +12,34 @@ Fair assignment of manage for tournament in multipalyer commander
 ```bash
 TrueCommanderCompanion/
 │
-├──.dart_tool/
-│   ├── extension_discovery/
-│   │   └── vs_code.json
-│   │   
-│   ├── pub/
-│   │    └── workspace_ref.json
+├──apps/
+│   ├── server/
+|   |   ├── bin/
+|   |   |    └── server.dart 
+|   |   ├── test/
+|   |   |    ├── 
+|   |   |    └── 
+|   |   ├── bin/
+|   |   ├── bin/
+|   |   ├── bin/
+|   |   ├── bin/
+|   |   ├── bin/
+│   │   └── vs_code.json   
 │   │    
-│   ├── data/
-│   │    └── local_db.dart
+│   ├── true_commander/
+|   |   ├── bin/
+│   │   └── local_db.dart
 │   │
-│   ├── package_config.json **
-│   ├── ui/
-│   ├── screens/
-│   │   ├── home_screen.dart
-│   │   ├── tournament_screen.dart
-│   │   ├── round_screen.dart
-│   │   └── standings_screen.dart
-│   │
-│   └── widgets/
-│   │   ├── player_tile.dart
-│   │   ├── table_card.dart
-│   │   └── timer_widget.dart
-│   │
-│   ├── utils/
-│   │   ├── constants.dart
-│   │   └── helpers.dart
-│   └── main.dart
+│   |
+│   |
+│   |
+│   │   
+│   │   
+│   │   
+│   │   
+│   
+├──packages/
+|    └── shared_logic/
 ├──.gitignore
 ├──LICENSE
 ├── pubspec.lock
