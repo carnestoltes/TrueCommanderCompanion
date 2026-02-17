@@ -106,12 +106,6 @@ void main() async {
     return Response.ok(jsonEncode({'status': 'waiting'}));
   });
 
-  router.post('/verify-admin', (Request request) async {
-    final data = jsonDecode(await request.readAsString());
-    if (data['password'] == admin_pass) return Response.ok(jsonEncode({'auth': true}));
-    return Response(401, body: jsonEncode({'auth': false}));
-  });
-
   router.get('/history', (Request request) => Response.ok(jsonEncode(gameHistory)));
 
   router.get('/export', (Request request) {
