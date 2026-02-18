@@ -1,21 +1,27 @@
-# Use latest stable channel SDK.
+# STAGE 1: Build
 FROM dart:stable AS build
 
-# Resolve app dependencies.
-WORKDIR /app
-COPY pubspec.* ./
+# This should be the folder where pubspec.yaml lives
+WORKDIR /apps/server
+
+# Copy ONLY the dependency files first
+COPY pubspec.yaml ./
+# If you have a pubspec.lock, uncomment the next line
+#COPY pubspec.lock ./
+
+# Try to get packages
 RUN dart pub get
 
-# Copy app source code (except anything in .dockerignore) and AOT compile app.
+# Copy the rest of the source code
 COPY . .
-RUN dart build cli --target bin/server.dart -o output
 
-# Build minimal serving image from AOT-compiled `/server`
-# and the pre-built AOT-runtime in the `/runtime/` directory of the base image.
-FROM scratch
+# Ensure the path to your server.dart is correct relative to pubspec.yaml
+RUN dart compile exe bin/server.dart -o bin/server
+
+# STAGE 2: Runtime
+FROM debian:bookworm-slim
 COPY --from=build /runtime/ /
-COPY --from=build /app/output/bundle/ /app/
+COPY --from=build /app/bin/server /app/bin/server
 
-# Start server.
 EXPOSE 8080
 CMD ["/app/bin/server"]
