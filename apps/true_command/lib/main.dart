@@ -19,15 +19,16 @@ class TournamentApp extends StatefulWidget {
 
 class _TournamentAppState extends State<TournamentApp> {
   // --- CONFIGURATION ---
-  String serverIp = "192.168.1.14";
-  String serverPort = "5000"; 
+String serverUrl = "https://truecommandercompanion.onrender.com"; 
+  
   final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _roomController = TextEditingController(); // NEW: For Room ID
   final TextEditingController _roundsController = TextEditingController(text: "3");
 
-  // --- NEW STATE VARIABLES ---
   bool hasSelectedRole = false;
   bool isAdmin = false;
-  String? loggedInUser; // To identify which player is using the phone
+  String? loggedInUser;
+  String? roomName; // NEW: Stores the current room
   String? currentAdminPassword;
 
   List<dynamic> players = [];
@@ -66,7 +67,7 @@ final List<String> _tieBreakRules = [
 
   // 1. Function to Change Server IP
   // 1. Revised IP Dialog
-  void _showChangeIpDialog() {
+  /*void _showChangeIpDialog() {
     TextEditingController ipController = TextEditingController(text: serverIp);
     showDialog(
       context: context,
@@ -103,7 +104,7 @@ final List<String> _tieBreakRules = [
         ],
       ),
     );
-  }
+  }*/
 
   // 2. Revised Password Dialog
   void _showChangePasswordDialog() {
@@ -183,31 +184,115 @@ void _confirmReset() {
 }
 
 void _showJoinQR() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("Scan to Join"),
-        content: SizedBox(
-          width: 250,
-          height: 250,
-          child: Center(
-            child: QrImageView(
-              data: "http:$serverIp:$serverPort/join",
+  // We create a simple string that identifies this as our app's data
+  // Format: APP_NAME:ROOM_ID
+  String qrData = "COMMANDER_BEDH:$roomName";
+
+  showDialog(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: Text("Invite Players to: $roomName"),
+      content: SizedBox(
+        width: 250,
+        height: 280,
+        child: Column(
+          children: [
+            QrImageView(
+              data: qrData,
               version: QrVersions.auto,
               size: 200.0,
             ),
-          ),
+            const SizedBox(height: 10),
+            const Text("Players can scan this to join your room automatically!",
+                textAlign: TextAlign.center, style: TextStyle(fontSize: 12)),
+          ],
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Close"))
-        ],
       ),
-    );
-  }
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text("Close"))
+      ],
+    ),
+  );
+}
   // --- API CALLS ---
 
+// Helper to build the URL with the Room ID
+String _baseUrl(String endpoint) => "$serverUrl/$roomName/$endpoint";
+
+Future<void> refreshLobby() async {
+    if (roomName == null) return;
+    try {
+      // Notice how we use the roomName in the URL now
+      final pRes = await http.get(Uri.parse(_baseUrl('players')));
+      final sRes = await http.get(Uri.parse(_baseUrl('status')));
+      final hRes = await http.get(Uri.parse(_baseUrl('history')));
+
+      if (pRes.statusCode == 200 && sRes.statusCode == 200 && hRes.statusCode == 200) {
+        final statusData = jsonDecode(sRes.body);
+        setState(() {
+          players = jsonDecode(pRes.body);
+          history = jsonDecode(hRes.body);
+          isFinished = statusData['status'] == 'finished';
+          if (statusData['status'] == 'started') {
+            tableAssignments = statusData['assignments'];
+            currentRound = statusData['round'] ?? 0;
+          } else if (statusData['status'] == 'waiting') {
+            tableAssignments = [];
+            isFinished = false;
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint("Sync Error: $e");
+    }
+  }
+
+  Future<void> joinTournament() async {
+    if (_nameController.text.isEmpty || _roomController.text.isEmpty) {
+       ScaffoldMessenger.of(context).showSnackBar(
+         const SnackBar(content: Text("Enter both Name and Room ID"))
+       );
+       return;
+    }
+    
+    // Set the room name first
+    roomName = _roomController.text.trim();
+
+    await http.post(
+      Uri.parse(_baseUrl('join')),
+      body: jsonEncode({'name': _nameController.text}),
+    );
+    
+    setState(() {
+      loggedInUser = _nameController.text;
+      hasSelectedRole = true;
+      isAdmin = false;
+    });
+    refreshLobby();
+  }
+
+Future<void> _scanJoinCode() async {
+  final String? code = await Navigator.push(
+    context, 
+    MaterialPageRoute(builder: (context) => const QRScannerPage())
+  );
+
+  // If the scanned code matches our specific format
+  if (code != null && code.startsWith("COMMANDER_BEDH:")) {
+    String scannedRoom = code.split(":")[1]; // Extract the room name
+    
+    setState(() {
+      _roomController.text = scannedRoom; // Auto-fill the UI
+      roomName = scannedRoom;            // Set the variable
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text("Joined Room: $scannedRoom"), backgroundColor: Colors.green),
+    );
+  }
+}
 Future<void> _sendPasswordUpdateToServer(String newPass) async {
-  final url = Uri.parse('http://$serverIp:8080/update-password');
+  final url = Uri.parse(_baseUrl('update-password'));
   
   try {
     final response = await http.post(
@@ -227,7 +312,7 @@ Future<void> _sendPasswordUpdateToServer(String newPass) async {
 }
 
   Future<void> downloadReport() async {
-  final response = await http.get(Uri.parse('http://$serverIp:8080/export'));
+  final response = await http.get(Uri.parse(_baseUrl('export')));
 
     if (response.statusCode == 200) {
       showDialog(
@@ -255,53 +340,6 @@ Future<void> _sendPasswordUpdateToServer(String newPass) async {
       );
     }
   }
-  Future<void> refreshLobby() async {
-    //if (!hasSelectedRole) return; // Don't refresh if we're on the role selection screen
-  try {
-    final pRes = await http.get(Uri.parse('http://$serverIp:8080/players'));
-    final sRes = await http.get(Uri.parse('http://$serverIp:8080/status'));
-    final hRes = await http.get(Uri.parse('http://$serverIp:8080/history'));
-
-    if (pRes.statusCode == 200 && sRes.statusCode == 200 && hRes.statusCode == 200) {
-      final statusData = jsonDecode(sRes.body);
-      final List<dynamic> decodedPlayers = jsonDecode(pRes.body);
-
-      setState(() {
-        // We ensure the app treats points as num (double/int)
-        players = decodedPlayers;
-        history = jsonDecode(hRes.body);
-        
-        // Update current status
-        isFinished = statusData['status'] == 'finished';
-        
-        if (statusData['status'] == 'started') {
-          tableAssignments = statusData['assignments'];
-          currentRound = statusData['round'] ?? 0;
-          //maxRounds = statusData['maxRounds'] ?? 3;
-        } else if (statusData['status'] == 'waiting') {
-          tableAssignments = []; // Clear tables if back in lobby
-          isFinished = false;
-        }
-      });
-    }
-  } catch (e) {
-    debugPrint("Sync Error: $e");
-  }
-  }
-
-  Future<void> joinTournament() async {
-    if (_nameController.text.isEmpty) return;
-    await http.post(
-      Uri.parse('http://$serverIp:8080/join'),
-      body: jsonEncode({'name': _nameController.text}),
-    );
-    setState(() {
-      loggedInUser = _nameController.text;
-      hasSelectedRole = true;
-      isAdmin = false;
-    });
-    refreshLobby();
-  }
 
   Future<void> reportResult(String pName, num points, int rank, int tableId) async {
   // Determine rank based on points for the history log
@@ -314,7 +352,7 @@ Future<void> _sendPasswordUpdateToServer(String newPass) async {
 
   try {
     final response = await http.post(
-      Uri.parse('http://$serverIp:8080/report-result'),
+      Uri.parse(_baseUrl('report-result')),
       headers: {"Content-Type": "application/json"},
       body: jsonEncode({
         'name': pName,
@@ -339,7 +377,7 @@ Future<void> _sendPasswordUpdateToServer(String newPass) async {
   Future<void> startNextRound() async {
   try {
     final response = await http.post(
-      Uri.parse('http://$serverIp:8080/start'),
+      Uri.parse(_baseUrl('start')),
       // ADD THIS LINE: Tells the server we are sending JSON
       headers: {"Content-Type": "application/json"}, 
       body: jsonEncode({
@@ -371,7 +409,7 @@ Future<void> _sendPasswordUpdateToServer(String newPass) async {
 
  Future<void> resetTournament() async {
   try {
-    final response = await http.get(Uri.parse('http://$serverIp:8080/reset'));
+    final response = await http.get(Uri.parse(_baseUrl('reset')));
     
     if (response.statusCode == 200) {
       setState(() {
@@ -401,7 +439,7 @@ Future<void> _sendPasswordUpdateToServer(String newPass) async {
   Future<void> deleteHistoryEntry(Map<String, dynamic> entry) async {
   try {
     final response = await http.post(
-      Uri.parse('http://$serverIp:8080/undo'),
+      Uri.parse(_baseUrl('undo')),
       headers: {"Content-Type": "application/json"},
       body: jsonEncode({
         'adminPassword': currentAdminPassword,
@@ -421,24 +459,6 @@ Future<void> _sendPasswordUpdateToServer(String newPass) async {
     debugPrint("Delete Error: $e");
   }
 }
-
-/*Future<void> _scanJoinCode() async {
-  // We navigate to a new screen that handles the camera
-  final String? code = await Navigator.push(
-    context, 
-    MaterialPageRoute(builder: (context) => const QRScannerPage())
-  );
-
-  if (code != null && code.startsWith("BEDH:")) {
-    String scannedIp = code.substring(5); // Extract IP from "BEDH:192.168.1.14"
-    setState(() {
-      serverIp = scannedIp;
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text("Connected to $serverIp"), backgroundColor: Colors.green),
-    );
-  }
-}*/
 
   void _generateRandomRule() {
   setState(() {
@@ -495,7 +515,7 @@ void _showAdminPasswordDialog() {
           onPressed: () async {
             // Ask the server if this password is correct
             final response = await http.post(
-              Uri.parse('http://$serverIp:8080/verify-admin'),
+              Uri.parse(_baseUrl('verify-admin')),
               body: jsonEncode({'password': enteredPass}),
             );
 
@@ -543,43 +563,71 @@ void _showAdminPasswordDialog() {
                 "COMMANDER BEDH", 
                 style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
               ),
-              const SizedBox(height: 40),
+              const SizedBox(height: 30),
               
+              // NEW: Room ID Field
+                TextField(
+                  controller: _roomController,
+                  decoration: const InputDecoration(
+                    labelText: "Tournament Room Name (e.g. FridayMagic)",
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.meeting_room),
+                  ),
+                ),
+              const SizedBox(height: 15),
               TextField(
                 controller: _nameController,
                 decoration: const InputDecoration(
-                  labelText: "Enter Your Name",
+                  labelText: "Your Player Name",
                   border: OutlineInputBorder(),
                   prefixIcon: Icon(Icons.person),
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 20),
 
               const SizedBox(height: 12),
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
                       onPressed: joinTournament,
-                      child: const Text("Join as Player"),
+                      child: const Text("Join Tournament"),
+                    ),
+                  ),
+                  TextField(
+                    controller: _roomController,
+                    decoration: InputDecoration(
+                      labelText: "Tournament Room Name",
+                      border: const OutlineInputBorder(),
+                      prefixIcon: const Icon(Icons.meeting_room),
+                      suffixIcon: IconButton( // ADD THIS
+                        icon: const Icon(Icons.qr_code_scanner),
+                        onPressed: _scanJoinCode, 
+                      ),
                     ),
                   ),
               
-              const Text("OR"),
-              
-              TextButton.icon(
-                icon: const Icon(Icons.admin_panel_settings, color: Colors.red),
-                label: const Text(
-                  "Enter as Administrator", 
-                  style: TextStyle(color: Colors.red),
+             const Padding(padding: EdgeInsets.symmetric(vertical: 10), child: Text("OR")),
+                
+                TextButton.icon(
+                  icon: const Icon(Icons.admin_panel_settings, color: Colors.red),
+                  label: const Text("Administer Room", style: TextStyle(color: Colors.red)),
+                  onPressed: () {
+                    if (_roomController.text.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text("Enter a Room Name first"))
+                      );
+                    } else {
+                      roomName = _roomController.text.trim();
+                      _showAdminPasswordDialog();
+                    }
+                  }, 
                 ),
-                onPressed: _showAdminPasswordDialog, 
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
-    ),
-  );
+    );
   }
 
 Widget _buildMainView() {
@@ -623,11 +671,11 @@ Widget _buildMainView() {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                TextButton.icon(
+                /*TextButton.icon(
                   onPressed: _showChangeIpDialog,
                   icon: const Icon(Icons.edit_location_alt, size: 18),
                   label: const Text("Change IP"),
-                ),
+                ),*/
                 TextButton.icon(
                     onPressed: _showJoinQR, // <--- Calls your show function
                     icon: const Icon(Icons.qr_code, color: Colors.blue),

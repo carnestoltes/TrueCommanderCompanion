@@ -1,16 +1,25 @@
 import 'dart:convert';
+import 'dart:io'; // Import for Platform
 import 'package:shelf/shelf.dart';
 import 'package:shelf/shelf_io.dart' as io;
 import 'package:shelf_router/shelf_router.dart';
-//import 'package:dotenv/dotenv.dart';
 
-List<Map<String, dynamic>> players = [];
-List<Map<String, dynamic>> currentAssignments = [];
-List<Map<String, dynamic>> gameHistory = [];
-int currentRound = 0;
-int maxRounds = 3; 
-bool tournamentFinished = false;
-String admin_pass = 'admin123';
+// --- MULTI-ROOM STORAGE ---
+// Instead of one list, we use a Map: RoomID -> Tournament Data
+Map<String, Map<String, dynamic>> rooms = {};
+
+// Helper to get or create a room instance
+Map<String, dynamic> getRoom(String id) {
+  return rooms.putIfAbsent(id, () => {
+    'players': [],
+    'assignments': [],
+    'history': [],
+    'round': 0,
+    'maxRounds': 3,
+    'isFinished': false,
+    'pass': 'admin123',
+  });
+}
 
 Handler _addCorsHeaders(Handler handler) {
   return (Request request) async {
@@ -28,157 +37,90 @@ Handler _addCorsHeaders(Handler handler) {
 
 void main() async {
   final router = Router();
-  /*var env = DotEnv()..load(); // This reads the .env file automatically
-  final String admin_pass = env['ADMIN_PASS'] ?? 'default';*/
 
-  router.post('/update-password', (Request request) async {
+  // 1. UPDATE PASSWORD
+  router.post('/<room>/update-password', (Request request, String room) async {
     final data = jsonDecode(await request.readAsString());
-    
-    // We update the global variable above
-    admin_pass = data['newPassword']; 
-    
-    print("Password updated to: $admin_pass");
+    var r = getRoom(room);
+    r['pass'] = data['newPassword'];
     return Response.ok(jsonEncode({'status': 'success'}));
   });
 
-  router.post('/verify-admin', (Request request) async {
+  // 2. VERIFY ADMIN
+  router.post('/<room>/verify-admin', (Request request, String room) async {
     final data = jsonDecode(await request.readAsString());
-    
-    // Stricly check against the variable 'admin_pass'
-    if (data['password'] == admin_pass) {
-      return Response.ok(jsonEncode({'auth': true}));
-    }
+    var r = getRoom(room);
+    if (data['password'] == r['pass']) return Response.ok(jsonEncode({'auth': true}));
     return Response(401, body: jsonEncode({'auth': false}));
-    });
+  });
 
-  router.post('/join', (Request request) async {
+  // 3. JOIN
+  router.post('/<room>/join', (Request request, String room) async {
     final data = jsonDecode(await request.readAsString());
-    if (!players.any((p) => p['name'] == data['name'])) {
-      players.add({'name': data['name'], 'points': 0.0, 'sos': 0.0});
+    var r = getRoom(room);
+    List pList = r['players'];
+    if (!pList.any((p) => p['name'] == data['name'])) {
+      pList.add({'name': data['name'], 'points': 0.0, 'sos': 0.0});
     }
     return Response.ok(jsonEncode({'status': 'success'}));
   });
 
-  router.get('/players', (Request request) {
-  // 1. Calculate REAL SoS (Buchholz) for every player
-  for (var player in players) {
-    double sosScore = 0.0;
-    String name = player['name'];
-
-    // Find all rounds this player participated in
-    var myMatches = gameHistory.where((entry) => entry['player'] == name).toList();
-
-    for (var match in myMatches) {
-      int round = match['round'];
-      int table = match['table'];
-
-      // Find everyone else who was at the same table in that SAME round
-      var opponentsInMatch = gameHistory.where((entry) => 
-        entry['round'] == round && 
-        entry['table'] == table && 
-        entry['player'] != name
-      );
-
-      for (var opp in opponentsInMatch) {
-        // Find the opponent's CURRENT total points from the main list
-        var oppData = players.firstWhere(
-          (p) => p['name'] == opp['player'], 
-          orElse: () => {'points': 0.0}
-        );
-        sosScore += (oppData['points'] as num).toDouble();
-      }
-    }
-    // Store the calculated sum as the player's SoS
-    player['sos'] = sosScore;
-  }
-
-  // 2. Sort the list: Points first (Descending), then SoS (Descending)
-  players.sort((a, b) {
-    num pA = a['points'] ?? 0.0;
-    num pB = b['points'] ?? 0.0;
-    int cmp = pB.compareTo(pA); // Primary: Points
-    
-    if (cmp == 0) {
-      num sA = a['sos'] ?? 0.0;
-      num sB = b['sos'] ?? 0.0;
-      return sB.compareTo(sA); // Secondary: Strength of Schedule
-    }
-    return cmp;
-  });
-
-  return Response.ok(jsonEncode(players));
-  });
-
-  router.post('/undo', (Request request) async {
-    final data = jsonDecode(await request.readAsString());
-    if (data['adminPassword'] != admin_pass) return Response(403);
-    if (gameHistory.isNotEmpty) {
-      var lastLog = gameHistory.removeAt(0);
-      for (var p in players) {
-        if (p['name'] == lastLog['player']) {
-          p['points'] = (p['points'] as num) - (lastLog['points'] as num);
-          p['sos'] = (p['sos'] as num) - (lastLog['points'] as num);
-        }
-      }
-      return Response.ok(jsonEncode({'status': 'undone'}));
-    }
-    return Response.badRequest(body: 'History empty');
-  });
-
-  router.get('/status', (Request request) {
-    // FIX: If tournamentFinished is true, always return finished
-    if (tournamentFinished) {
-      return Response.ok(jsonEncode({'status': 'finished'}));
-    }
-    if (currentAssignments.isNotEmpty) {
+  // 4. GET STATUS (Updated logic)
+  router.get('/<room>/status', (Request request, String room) {
+    var r = getRoom(room);
+    if (r['isFinished']) return Response.ok(jsonEncode({'status': 'finished'}));
+    if (r['assignments'].isNotEmpty) {
       return Response.ok(jsonEncode({
         'status': 'started', 
-        'assignments': currentAssignments,
-        'round': currentRound,
-        'maxRounds': maxRounds
+        'assignments': r['assignments'],
+        'round': r['round'],
+        'maxRounds': r['maxRounds']
       }));
     }
     return Response.ok(jsonEncode({'status': 'waiting'}));
   });
 
-  router.get('/history', (Request request) => Response.ok(jsonEncode(gameHistory)));
+  // 5. GET PLAYERS (With SoS Logic preserved)
+  router.get('/<room>/players', (Request request, String room) {
+    var r = getRoom(room);
+    List players = r['players'];
+    List history = r['history'];
 
-  router.get('/export', (Request request) {
-    // FIX: Sorting must use num, not int cast
-    players.sort((a, b) {
-      num pA = a['points'] ?? 0.0;
-      num pB = b['points'] ?? 0.0;
-      int cmp = pB.compareTo(pA);
-      if (cmp == 0) return (b['sos'] as num).compareTo(a['sos'] as num);
-      return cmp;
-    });
-
-    StringBuffer report = StringBuffer();
-    report.writeln("=== TOURNAMENT FINAL REPORT ===");
-    report.writeln("\n--- FINAL STANDINGS ---");
-    for (int i = 0; i < players.length; i++) {
-      report.writeln("#${i + 1}: ${players[i]['name']} - ${players[i]['points']} Pts (SoS: ${players[i]['sos']})");
+    for (var player in players) {
+      double sosScore = 0.0;
+      var myMatches = history.where((entry) => entry['player'] == player['name']).toList();
+      for (var match in myMatches) {
+        var opponents = history.where((e) => e['round'] == match['round'] && e['table'] == match['table'] && e['player'] != player['name']);
+        for (var opp in opponents) {
+          var oppData = players.firstWhere((p) => p['name'] == opp['player'], orElse: () => {'points': 0.0});
+          sosScore += (oppData['points'] as num).toDouble();
+        }
+      }
+      player['sos'] = sosScore;
     }
-    return Response.ok(report.toString(), headers: {'Content-Type': 'text/plain'});
-  });
+    players.sort((a, b) => (b['points'] as num).compareTo(a['points'] as num) != 0 
+      ? (b['points'] as num).compareTo(a['points'] as num) 
+      : (b['sos'] as num).compareTo(a['sos'] as num));
 
-  router.post('/report-result', (Request request) async {
+    return Response.ok(jsonEncode(players));
+  });
+  // 5. REPORT RESULT
+  router.post('/<room>/report-result', (Request request, String room) async {
     final data = jsonDecode(await request.readAsString());
-    if (data['adminKey'] != admin_pass) return Response(403);
+    var r = getRoom(room);
+    if (data['adminKey'] != r['pass']) return Response(403);
 
     String playerName = data['name'];
-    double pointsToAdd = (data['points'] as num).toDouble();
+    double pts = (data['points'] as num).toDouble();
 
-    for (var p in players) {
+    for (var p in r['players']) {
       if (p['name'] == playerName) {
-        p['points'] = (p['points'] as num).toDouble() + pointsToAdd;
-        p['sos'] = (p['sos'] ?? 0.0) + pointsToAdd; 
-
-        gameHistory.insert(0, {
+        p['points'] = (p['points'] as num).toDouble() + pts;
+        r['history'].insert(0, {
           'player': playerName,
           'rank': data['rank'], 
-          'points': pointsToAdd,
-          'round': currentRound,
+          'points': pts,
+          'round': r['round'],
           'table': data['table'],
           'time': DateTime.now().toString().substring(11, 16)
         });
@@ -187,41 +129,38 @@ void main() async {
     return Response.ok(jsonEncode({'status': 'success'}));
   });
 
-  router.post('/start', (Request request) async {
+  // 6. START NEXT ROUND
+  router.post('/<room>/start', (Request request, String room) async {
+    var r = getRoom(room);
+    List players = r['players'];
     if (players.isEmpty) return Response.badRequest(body: 'No players!');
+
     final body = await request.readAsString();
     if (body.isNotEmpty) {
       final data = jsonDecode(body);
-      if (data['adminPassword'] != admin_pass) return Response(403);
-      maxRounds = data['maxRounds'] ?? maxRounds;
+      if (data['adminPassword'] != r['pass']) return Response(403);
+      r['maxRounds'] = data['maxRounds'] ?? r['maxRounds'];
     }
 
-    if (currentRound == 0) {
-      players.shuffle();
-    }
+    if (r['round'] == 0) players.shuffle();
     
-    if (currentRound >= maxRounds) {
-      tournamentFinished = true;
-      currentAssignments = []; 
+    if (r['round'] >= r['maxRounds']) {
+      r['isFinished'] = true;
+      r['assignments'] = []; 
       return Response.ok(jsonEncode({'status': 'finished'}));
     }
 
-    currentRound++;
-    players.sort((a, b) {
-      num pA = a['points'] ?? 0.0;
-      num pB = b['points'] ?? 0.0;
-      int cmp = pB.compareTo(pA);
-      if (cmp == 0) return (b['sos'] as num).compareTo(a['sos'] as num);
-      return cmp;
-    });
+    r['round']++;
+    players.sort((a, b) => (b['points'] as num).compareTo(a['points'] as num) != 0 
+      ? (b['points'] as num).compareTo(a['points'] as num) 
+      : (b['sos'] as num).compareTo(a['sos'] as num));
 
-    currentAssignments = [];
+    List assignments = [];
     int total = players.length;
     
-    // Balanced split for 6 players
     if (total == 6) {
       for(int i=0; i<2; i++) {
-        currentAssignments.add({
+        assignments.add({
           'table': i + 1,
           'players': players.sublist(i*3, (i*3)+3).map((p) => p['name'] as String).toList(),
         });
@@ -230,30 +169,65 @@ void main() async {
       int pPerTable = 4;
       for (var i = 0; i < total; i += pPerTable) {
         int end = (i + pPerTable < total) ? i + pPerTable : total;
-        currentAssignments.add({
+        assignments.add({
           'table': (i ~/ pPerTable) + 1,
           'players': players.sublist(i, end).map((p) => p['name'] as String).toList(),
         });
       }
     }
-
-    return Response.ok(jsonEncode({
-      'status': 'started',
-      'round': currentRound,
-      'assignments': currentAssignments
-    }));
+    r['assignments'] = assignments;
+    return Response.ok(jsonEncode({'status': 'started', 'round': r['round'], 'assignments': assignments}));
   });
 
-  router.get('/reset', (Request request) {
-    players.clear();
-    currentAssignments.clear();
-    gameHistory.clear();
-    currentRound = 0;
-    tournamentFinished = false;
+  // 7. UNDO LAST ACTION
+  router.post('/<room>/undo', (Request request, String room) async {
+    final data = jsonDecode(await request.readAsString());
+    var r = getRoom(room);
+    if (data['adminPassword'] != r['pass']) return Response(403);
+
+    if (r['history'].isNotEmpty) {
+      var lastLog = r['history'].removeAt(0);
+      for (var p in r['players']) {
+        if (p['name'] == lastLog['player']) {
+          p['points'] = (p['points'] as num) - (lastLog['points'] as num);
+        }
+      }
+      return Response.ok(jsonEncode({'status': 'undone'}));
+    }
+    return Response.badRequest(body: 'History empty');
+  });
+
+  // 8. RESET ROOM
+  router.get('/<room>/reset', (Request request, String room) {
+    rooms[room] = {
+      'players': [],
+      'assignments': [],
+      'history': [],
+      'round': 0,
+      'maxRounds': 3,
+      'isFinished': false,
+      'pass': 'admin123',
+    };
     return Response.ok(jsonEncode({'status': 'reset'}));
   });
 
+  // 9. STATUS & HISTORY & EXPORT
+  router.get('/<room>/status', (Request request, String room) {
+    var r = getRoom(room);
+    if (r['isFinished']) return Response.ok(jsonEncode({'status': 'finished'}));
+    return Response.ok(jsonEncode({
+      'status': r['assignments'].isEmpty ? 'waiting' : 'started', 
+      'assignments': r['assignments'],
+      'round': r['round'],
+      'maxRounds': r['maxRounds']
+    }));
+  });
+
+router.get('/<room>/history', (Request request, String room) => 
+    Response.ok(jsonEncode(getRoom(room)['history'])));
+
+  final port = int.parse(Platform.environment['PORT'] ?? '8080');
   final handler = Pipeline().addMiddleware(logRequests()).addMiddleware(_addCorsHeaders).addHandler(router.call);
-  await io.serve(handler, '0.0.0.0', 8080);
-  print('TrueCommander Server running on port 8080');
+  await io.serve(handler, '0.0.0.0', port);
+  print('BEDH Cloud Server running on port $port');
 }
