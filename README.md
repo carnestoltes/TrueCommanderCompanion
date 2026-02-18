@@ -1,4 +1,4 @@
-# Commander BEDH Torunament Manager
+# Commander BEDH Tournament Manager
 
 A full-stack tournament management system designed for Commander (EDH) pods. It features a Dart-based backend server and a Flutter mobile application for real-time table assignments, result reporting, and advanced tie-breaker calculations.
 
