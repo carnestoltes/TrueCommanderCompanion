@@ -108,6 +108,16 @@ __Undo System:__ Mistakenly reported results can be deleted, and points are auto
 * Prefer tables of 4 players
 * Allow tables of 3 players only when unavoidable
 
+### Naive Swiss vs Balanced Swiss
+
+Model of **naive swiss** take the four player with the most score in one table and the tail of other four in the other table so, making the avg of two pairing, the first table has an avg of 10.5 points against the second tables has only an avg of 4.5.
+Translation meaning, death teable vs free win table, strong player elimated each other while weak players farm points.
+
+Our model, **balanced swiss**, obtainig as result in each match obtain 1 strong player, 1 mid-strong player, 1 mid-weak player and 1 weak player.
+
+* Minimize the number of repeated opponents thought the tournament rounds
+* Balance average points
+  
 Example scenario
 
 An 8 players end the first round and the score result is:
@@ -123,29 +133,10 @@ An 8 players end the first round and the score result is:
 |   G  |  4   |
 |   H  |  3   |
 
-Model of **naive swiss** take the four player with the most score in one table and the tail of other four in the other table so, making the avg of two pairing, the first table has an avg of 10.5 points against the second tables has only an avg of 4.5.
-Translation meaning, death teable vs free win table, strong player elimated each other while weak players farm points.
 
-Our model, **balanced swiss**, transition and put in table one A, D, E, H and table two B, C, F, G given as result of avg in point 7.5 in each table.
-
-Result in each match obtain 1 strong player, 1 mid-strong player, 1 mid-weak player and 1 weak player.
-
-* Minimize the number of repeated opponents thought the tournament rounds
-
-Example scenario
+Put in table one A, D, E, H and table two B, C, F, G given as result of avg in point 7.5 in each table.
 
 Exist eight players in the event, A .. H and player A already plays with B, C and D so E, F, G, H are preferred but just in case we need it, player A repeat pairing against player B, C or D dependending of global classification.
-
-* Balance average points
-
-Using snake distribution approach, sorting player for swiss, adapting tables for preferred maximum tables of 4 players and applies a round robin across tables algorithm.
-
-Example scenario
-
-In each round take each player for the beggining or the end of tail, i mean:
-Round 1 --> P1 in T1, P2 in T2, P3 in T3.
-Round 2 (asuming the scale of points) --> P4 in T3, P5 in T2 and P6 in T1.
-The order of assignment the tables use reverse order but still respecfully with swiss normative.
 
 **Complexity in the worst case: O(n^2)**
 
