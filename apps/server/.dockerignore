@@ -1,9 +1,12 @@
-.dockerignore
-Dockerfile
-build/
+# Cache and local tools
 .dart_tool/
-.git/
-.github/
-.gitignore
-.idea/
 .packages
+.pub-cache/
+.pub/
+
+# IDEs
+.idea/
+.vscode/
+
+# Build artifacts
+build/
