@@ -1,30 +1,26 @@
 # STAGE 1: Build
 FROM dart:stable AS build
 
-# We use /app as the working directory inside the container
 WORKDIR /app
 
-# 1. Copy only the pubspec to install dependencies first (Cache-friendly)
-COPY pubspec.yaml ./
+# 1. Copy the WHOLE workspace structure so 'resolution: workspace' works
+COPY pubspec.yaml ./ 
+COPY apps/server/pubspec.yaml ./apps/server/
+COPY packages/shared_logic/ ./packages/shared_logic/
+
+# 2. Get dependencies for the whole workspace
 RUN dart pub get
 
-# 2. Copy the rest of the server folder (bin, test, etc.)
-COPY . .
+# 3. Copy the rest of the server source
+COPY apps/server/ ./apps/server/
 
-# 3. Compile the production binary
-# This looks for apps/server/bin/server.dart because of the Root Directory setting
-RUN dart compile exe bin/server.dart -o bin/server
+# 4. Compile (Notice we point to the specific subfolder)
+RUN dart compile exe apps/server/bin/server.dart -o bin/server
 
-# STAGE 2: Runtime (Minimalist image)
+# STAGE 2: Runtime
 FROM debian:bookworm-slim
-
-# Copy runtime dependencies from Google's Dart image
 COPY --from=build /runtime/ /
-# Copy only the compiled server binary
 COPY --from=build /app/bin/server /app/bin/server
 
-# Standard port for Render
 EXPOSE 8080
-
-# Start the server
 CMD ["/app/bin/server"]
