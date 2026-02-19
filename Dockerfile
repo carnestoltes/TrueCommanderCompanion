@@ -7,6 +7,7 @@ WORKDIR /app
 # This is the "Skeleton" needed for Workspace resolution
 COPY pubspec.yaml ./
 COPY apps/server/pubspec.yaml ./apps/server/
+COPY apps/true_command/pubspec.yaml ./apps/true_command/
 COPY packages/shared_logic/pubspec.yaml ./packages/shared_logic/
 
 # 2. Resolve dependencies for the WHOLE workspace at once
@@ -15,6 +16,7 @@ RUN dart pub get
 
 # 3. Copy the actual source code
 COPY apps/server ./apps/server
+COPY apps/true_command ./apps/true_command
 COPY packages/shared_logic ./packages/shared_logic
 
 # 4. Compile the server
