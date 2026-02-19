@@ -1,47 +1,36 @@
-# ---------- BUILD FLUTTER WEB ----------
-FROM cirrusci/flutter:stable AS flutter_build
+# ---------- BUILD STAGE ----------
+FROM dart:stable AS build
 
 WORKDIR /app
 
-# 1. Copy the WORKSPACE ROOT (Essential!)
+# 1. Copy the Root and all Member Pubspecs first
+# This is the "Skeleton" needed for Workspace resolution
 COPY pubspec.yaml ./
+COPY apps/server/pubspec.yaml ./apps/server/
+COPY packages/shared_logic/pubspec.yaml ./packages/shared_logic/
 
-# 2. Copy the PUBSPECS for the members
-COPY apps/true_command/pubspec.* ./apps/true_command/
-COPY packages/shared_logic/pubspec.* ./packages/shared_logic/
-
-# 3. Resolve for the whole workspace
-RUN flutter pub get
-
-# 4. Copy source and build
-COPY apps/true_command ./apps/true_command
-COPY packages/shared_logic ./packages/shared_logic
-RUN cd apps/true_command && flutter build web
-
-# ---------- BUILD DART SERVER ----------
-FROM dart:stable AS server_build
-
-WORKDIR /app
-
-# 1. Copy the WORKSPACE ROOT again for this stage
-COPY pubspec.yaml ./
-
-# 2. Copy the PUBSPECS for server and logic
-COPY apps/server/pubspec.* ./apps/server/
-COPY packages/shared_logic/pubspec.* ./packages/shared_logic/
-
-# 3. Resolve (This will now pass Code 66)
+# 2. Resolve dependencies for the WHOLE workspace at once
+# This prevents Exit Code 1 by letting Dart see all packages
 RUN dart pub get
 
-# 4. Copy source and compile
+# 3. Copy the actual source code
 COPY apps/server ./apps/server
 COPY packages/shared_logic ./packages/shared_logic
-RUN cd apps/server && dart compile exe bin/server.dart -o server
 
-# ---------- FINAL IMAGE ----------
+# 4. Compile the server
+# We run this from the root, pointing to the server entry point
+RUN dart compile exe apps/server/bin/server.dart -o /app/server_bin
+
+# ---------- RUNTIME STAGE ----------
 FROM debian:stable-slim
 WORKDIR /app
-COPY --from=server_build /app/apps/server/server ./server
-COPY --from=flutter_build /app/apps/true_command/build/web ./web
+
+# Copy the compiled binary and the runtime from the build stage
+COPY --from=build /runtime/ /
+COPY --from=build /app/server_bin ./server
+
+# Expose the port Render expects
 EXPOSE 8080
+
+# Start the server
 CMD ["./server"]
