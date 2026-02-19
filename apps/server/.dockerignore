@@ -1,5 +1,4 @@
 # Cache and local tools
-Dockerfile
 .dart_tool/
 .packages
 .pub-cache/

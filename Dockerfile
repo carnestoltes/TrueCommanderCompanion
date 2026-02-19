@@ -1,5 +1,5 @@
 # ---------- BUILD FLUTTER WEB ----------
-FROM ghcr.io/cirruslabs/flutter:stable AS flutter_build
+FROM cirrusci/flutter:stable AS flutter_build
 
 WORKDIR /app
 COPY apps/true_command/pubspec.* ./apps/true_command/
