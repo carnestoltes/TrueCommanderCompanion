@@ -5,14 +5,56 @@ import 'dart:async';
 import 'dart:math';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:go_router/go_router.dart';
 
-void main() => runApp(const MaterialApp(
-      home: TournamentApp(),
+void main() {
+  runApp(MyApp());
+}
+
+final _router = GoRouter(
+  routes: [
+    GoRoute(
+      path: '/',
+      builder: (context, state) => const TournamentApp(),
+    ),
+    GoRoute(
+      path: '/admin/:room',
+      builder: (context, state) {
+        final room = state.pathParameters['room'];
+        return TournamentApp(initialRoom: room, forceAdmin: true);
+      },
+    ),
+    GoRoute(
+      path: '/lobby/:room',
+      builder: (context, state) {
+        final room = state.pathParameters['room'];
+        return TournamentApp(initialRoom: room);
+      },
+    ),
+  ],
+);
+
+class MyApp extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp.router(
       debugShowCheckedModeBanner: false,
-    ));
+      routerConfig: _router,
+    );
+  }
+}
+
 
 class TournamentApp extends StatefulWidget {
-  const TournamentApp({super.key});
+  final String? initialRoom;
+  final bool forceAdmin;
+
+  const TournamentApp({
+    super.key,
+    this.initialRoom,
+    this.forceAdmin = false,
+  });
+
   @override
   State<TournamentApp> createState() => _TournamentAppState();
 }
@@ -51,11 +93,25 @@ final List<String> _tieBreakRules = [
   "Nº of Mana Sources"
 ];
 
-  @override
-  void initState() {
-    super.initState();
-    _refreshTimer = Timer.periodic(const Duration(seconds: 3), (t) => refreshLobby());
+@override
+void initState() {
+  super.initState();
+
+  if (widget.initialRoom != null) {
+    roomName = widget.initialRoom;
+    hasSelectedRole = true;
+
+    if (widget.forceAdmin) {
+      isAdmin = true;
+      loggedInUser = "Admin";
+    }
   }
+
+  _refreshTimer =
+      Timer.periodic(const Duration(seconds: 3), (t) => refreshLobby());
+}
+
+
 
   @override
   void dispose() {
@@ -217,7 +273,7 @@ void _showJoinQR() {
   // --- API CALLS ---
 
 // Helper to build the URL with the Room ID
-String _baseUrl(String endpoint) => "$serverUrl/$roomName/$endpoint";
+String _baseUrl(String endpoint) => "$serverUrl/api/$roomName/$endpoint";
 
 Future<void> refreshLobby() async {
     if (roomName == null) return;
