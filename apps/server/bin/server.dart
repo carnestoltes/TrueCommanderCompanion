@@ -193,47 +193,76 @@ router.post('/api/<room>/report-result', (Request request, String room) async {
 });
 
   // ---------------- START ROUND ----------------
-  router.post('/api/<room>/start', (Request request, String room) async {
-    var r = getRoom(room);
-    List players = r['players'];
+router.post('/api/<room>/start', (Request request, String room) async {
+  var r = getRoom(room);
+  List players = r['players'];
+  List history = r['history'];
+  List assignments = r['assignments'];
 
-    if (players.isEmpty) {
-      return Response.badRequest(body: 'No players!');
+  if (players.isEmpty) {
+    return Response.badRequest(body: 'No players!');
+  }
+
+  // --- NEW: SAFETY CHECK ---
+  // If we are currently in a round (round > 0), check if everyone reported
+  if (r['round'] > 0 && assignments.isNotEmpty) {
+    // Collect all player names that were assigned to tables this round
+    List<String> assignedNames = [];
+    for (var table in assignments) {
+      assignedNames.addAll(List<String>.from(table['players']));
     }
 
-    if (r['round'] == 0) players.shuffle();
+    // Check if each assigned player has an entry in history for the current round
+    for (var pName in assignedNames) {
+      bool hasReported = history.any((entry) => 
+        entry['player'] == pName && entry['round'] == r['round']
+      );
 
-    if (r['round'] >= r['maxRounds']) {
-      r['isFinished'] = true;
-      r['assignments'] = [];
-      return Response.ok(jsonEncode({'status': 'finished'}));
+      if (!hasReported) {
+        return Response.badRequest(
+          body: jsonEncode({'error': 'Waiting for result from: $pName'}),
+          headers: {'content-type': 'application/json'}
+        );
+      }
     }
+  }
+  // --- END OF SAFETY CHECK ---
 
-    r['round']++;
-    players.sort((a, b) =>
-        (b['points'] as num).compareTo(a['points'] as num));
+  // Handle Tournament Finish
+  if (r['round'] >= r['maxRounds']) {
+    r['isFinished'] = true;
+    r['assignments'] = [];
+    return Response.ok(jsonEncode({'status': 'finished'}));
+  }
 
-    List assignments = [];
-    int total = players.length;
-    int pPerTable = 4;
+  // Shuffle only for the very first round
+  if (r['round'] == 0) players.shuffle();
 
-    for (var i = 0; i < total; i += pPerTable) {
-      int end = (i + pPerTable < total) ? i + pPerTable : total;
-      assignments.add({
-        'table': (i ~/ pPerTable) + 1,
-        'players':
-            players.sublist(i, end).map((p) => p['name'] as String).toList(),
-      });
-    }
+  r['round']++;
 
-    r['assignments'] = assignments;
+  // Sort by points for Swiss pairing
+  players.sort((a, b) => (b['points'] as num).compareTo(a['points'] as num));
 
-    return Response.ok(jsonEncode({
-      'status': 'started',
-      'round': r['round'],
-      'assignments': assignments
-    }));
-  });
+  List newAssignments = [];
+  int total = players.length;
+  int pPerTable = 4;
+
+  for (var i = 0; i < total; i += pPerTable) {
+    int end = (i + pPerTable < total) ? i + pPerTable : total;
+    newAssignments.add({
+      'table': (i ~/ pPerTable) + 1,
+      'players': players.sublist(i, end).map((p) => p['name'] as String).toList(),
+    });
+  }
+
+  r['assignments'] = newAssignments;
+
+  return Response.ok(jsonEncode({
+    'status': 'started',
+    'round': r['round'],
+    'assignments': newAssignments
+  }));
+});
 
  // ================= STATIC FLUTTER WEB =================
 

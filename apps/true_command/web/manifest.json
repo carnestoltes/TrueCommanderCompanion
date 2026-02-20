@@ -1,6 +1,6 @@
 {
-    "name": "true_command",
-    "short_name": "true_command",
+    "name": "BEDH Tournament",
+    "short_name": "BEDH",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

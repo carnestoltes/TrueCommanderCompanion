@@ -111,8 +111,6 @@ void initState() {
       Timer.periodic(const Duration(seconds: 3), (t) => refreshLobby());
 }
 
-
-
   @override
   void dispose() {
     _refreshTimer?.cancel();
@@ -121,6 +119,23 @@ void initState() {
     super.dispose();
   }
 
+  bool _allResultsIn() {
+    // If no round has started yet, we are ready to start Round 1
+    if (tableAssignments.isEmpty) return true;
+
+    // 1. Get a list of every player name currently assigned to a table
+    List<String> assignedPlayers = [];
+    for (var table in tableAssignments) {
+      if (table['players'] != null) {
+        assignedPlayers.addAll(List<String>.from(table['players']));
+      }
+    }
+
+    // 2. Check if every one of those players exists in the history for the current round
+    return assignedPlayers.every((pName) => 
+      history.any((log) => log['player'] == pName && log['round'] == currentRound)
+    );
+  }
   // 1. Function to Change Server IP
   // 1. Revised IP Dialog
   /*void _showChangeIpDialog() {
@@ -432,37 +447,48 @@ Future<void> reportResult(String pName, num points, int rank, int tableId) async
   }
  }
 
-  Future<void> startNextRound() async {
-  try {
-    final response = await http.post(
-      Uri.parse(_baseUrl('start')),
-      // ADD THIS LINE: Tells the server we are sending JSON
-      headers: {"Content-Type": "application/json"}, 
-      body: jsonEncode({
-        'maxRounds': int.tryParse(_roundsController.text) ?? 3,
-        'isAdmin': true, 
-        'adminPassword': currentAdminPassword 
-      }),
-    ).timeout(const Duration(seconds: 5)); // Add a timeout so it doesn't hang
+Future<void> startNextRound() async {
+    try {
+      final response = await http.post(
+        Uri.parse(_baseUrl('start')),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({
+          'maxRounds': int.tryParse(_roundsController.text) ?? 3,
+          'isAdmin': true,
+          'adminPassword': currentAdminPassword
+        }),
+      ).timeout(const Duration(seconds: 5));
 
-    if (response.statusCode == 200) {
-      refreshLobby();
+      if (response.statusCode == 200) {
+        refreshLobby();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Round Started!"), backgroundColor: Colors.green),
+        );
+      } else {
+        // --- NEW: Handle the JSON error message from the server ---
+        String errorMessage;
+        try {
+          final data = jsonDecode(response.body);
+          errorMessage = data['error'] ?? "Server Denied: ${response.body}";
+        } catch (e) {
+          // Fallback if the response isn't JSON
+          errorMessage = "Server error: ${response.statusCode}";
+        }
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(errorMessage), 
+            backgroundColor: Colors.orange,
+            duration: const Duration(seconds: 4), // Give them time to read the name
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint("Error Details: $e");
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Round Started!"), backgroundColor: Colors.green),
-      );
-    } else {
-      // If the password was wrong or body was malformed
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Server Denied: ${response.body}"), backgroundColor: Colors.orange),
+        const SnackBar(content: Text("Network Error: Is the server still running?"), backgroundColor: Colors.red),
       );
     }
-  } catch (e) {
-    // This is the "Network Error" you are seeing
-    print("Error Details: $e");
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("Network Error: Is the server still running?"), backgroundColor: Colors.red),
-    );
-  }
   }
 
  Future<void> resetTournament() async {
@@ -905,8 +931,19 @@ Widget _buildMainView() {
       ),
       floatingActionButton: (isAdmin && _currentIndex == 0 && !isFinished)
           ? FloatingActionButton(
-              onPressed: startNextRound,
-              backgroundColor: Colors.redAccent,
+              // If results are missing, show a SnackBar instead of calling the API
+              onPressed: _allResultsIn() 
+                  ? startNextRound 
+                  : () {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text("Cannot start next round: Some players haven't reported results!"),
+                          backgroundColor: Colors.orange,
+                        ),
+                      );
+                    },
+              // Visual cue: Red for "Go", Grey for "Wait"
+              backgroundColor: _allResultsIn() ? Colors.redAccent : Colors.grey,
               child: const Icon(Icons.play_arrow),
             )
           : null,
