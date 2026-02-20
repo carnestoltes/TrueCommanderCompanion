@@ -606,7 +606,7 @@ void _showAdminPasswordDialog() {
             children: [
               // --- LOGO FROM ASSETS ---
               Image.asset(
-                'logo.png',
+                'assets/logo.png',
                 height: 250, // Adjusted size
                 width: 400,
                 fit: BoxFit.contain,
