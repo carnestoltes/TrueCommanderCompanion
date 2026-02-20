@@ -240,9 +240,9 @@ void _confirmReset() {
 }
 
 void _showJoinQR() {
-  // We create a simple string that identifies this as our app's data
-  // Format: APP_NAME:ROOM_ID
-  String qrData = "COMMANDER_BEDH:$roomName";
+  // Use your actual Render URL + the lobby path
+  // This makes the QR code a "clickable link" for phone cameras
+  String qrData = "https://truecommandercompanion.onrender.com/lobby/$roomName";
 
   showDialog(
     context: context,
@@ -259,7 +259,7 @@ void _showJoinQR() {
               size: 200.0,
             ),
             const SizedBox(height: 10),
-            const Text("Players can scan this to join your room automatically!",
+            const Text("Players can scan this to open the app and join automatically!",
                 textAlign: TextAlign.center, style: TextStyle(fontSize: 12)),
           ],
         ),
@@ -334,18 +334,27 @@ Future<void> _scanJoinCode() async {
     MaterialPageRoute(builder: (context) => const QRScannerPage())
   );
 
-  // If the scanned code matches our specific format
-  if (code != null && code.startsWith("COMMANDER_BEDH:")) {
-    String scannedRoom = code.split(":")[1]; // Extract the room name
+  if (code != null) {
+    String scannedRoom = "";
     
-    setState(() {
-      _roomController.text = scannedRoom; // Auto-fill the UI
-      roomName = scannedRoom;            // Set the variable
-    });
+    // Check if it's the new URL format
+    if (code.contains("/lobby/")) {
+      scannedRoom = code.split("/lobby/").last;
+    } 
+    // Keep support for your old format just in case
+    else if (code.startsWith("COMMANDER_BEDH:")) {
+      scannedRoom = code.split(":")[1];
+    }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text("Joined Room: $scannedRoom"), backgroundColor: Colors.green),
-    );
+    if (scannedRoom.isNotEmpty) {
+      setState(() {
+        _roomController.text = scannedRoom;
+        roomName = scannedRoom;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Joined Room: $scannedRoom"), backgroundColor: Colors.green),
+      );
+    }
   }
 }
 Future<void> _sendPasswordUpdateToServer(String newPass) async {
@@ -398,15 +407,7 @@ Future<void> _sendPasswordUpdateToServer(String newPass) async {
     }
   }
 
-  Future<void> reportResult(String pName, num points, int rank, int tableId) async {
-  // Determine rank based on points for the history log
-  int rank;
-  if (points == 4) {
-    rank = 1;
-  } else if (points == 3 || points == 2.5) rank = 2;
-  else if (points == 2) rank = 3;
-  else rank = 4;
-
+Future<void> reportResult(String pName, num points, int rank, int tableId) async {
   try {
     final response = await http.post(
       Uri.parse(_baseUrl('report-result')),
@@ -414,7 +415,7 @@ Future<void> _sendPasswordUpdateToServer(String newPass) async {
       body: jsonEncode({
         'name': pName,
         'points': points,
-        'rank': rank,
+        'rank': rank, // Use the rank passed from the button
         'table': tableId,
         'adminKey': currentAdminPassword,
       }),

@@ -117,6 +117,26 @@ void main() async {
   }));
 });
 
+router.post('/api/<room>/report-result', (Request request, String room) async {
+  final data = jsonDecode(await request.readAsString());
+  var r = getRoom(room);
+  
+  // Update the player's total points
+  var player = r['players'].firstWhere((p) => p['name'] == data['name']);
+  player['points'] = (player['points'] as num) + (data['points'] as num);
+  
+  // Add to history log
+  r['history'].add({
+    'player': data['name'],
+    'points': data['points'],
+    'rank': data['rank'],
+    'table': data['table'],
+    'round': r['round'],
+  });
+  
+  return Response.ok(jsonEncode({'status': 'success'}));
+});
+
   // ---------------- START ROUND ----------------
   router.post('/api/<room>/start', (Request request, String room) async {
     var r = getRoom(room);
