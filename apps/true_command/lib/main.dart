@@ -982,7 +982,6 @@ Widget _buildMainView() {
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
               ElevatedButton.icon(onPressed: downloadReport, icon: const Icon(Icons.download), label: const Text("Export")),
-              ElevatedButton.icon(onPressed: resetTournament, icon: const Icon(Icons.refresh), label: const Text("Reset")),
             ],
           ),
         ),
