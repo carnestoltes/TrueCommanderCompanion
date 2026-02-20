@@ -107,6 +107,15 @@ void main() async {
   router.get('/api/<room>/history',
       (Request request, String room) =>
           Response.ok(jsonEncode(getRoom(room)['history'])));
+          
+  router.get('/api/<room>/status', (Request request, String room) {
+  var r = getRoom(room);
+  return Response.ok(jsonEncode({
+    'status': r['isFinished'] ? 'finished' : (r['assignments'].isEmpty ? 'waiting' : 'started'),
+    'round': r['round'],
+    'assignments': r['assignments'],
+  }));
+});
 
   // ---------------- START ROUND ----------------
   router.post('/api/<room>/start', (Request request, String room) async {
@@ -150,8 +159,6 @@ void main() async {
       'assignments': assignments
     }));
   });
-
-  // ================= STATIC FLUTTER WEB =================
 
  // ================= STATIC FLUTTER WEB =================
 

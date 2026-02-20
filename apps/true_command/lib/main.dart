@@ -272,8 +272,8 @@ void _showJoinQR() {
 }
   // --- API CALLS ---
 
-// Helper to build the URL with the Room ID
-String _baseUrl(String endpoint) => "$serverUrl/api/$roomName/$endpoint";
+// Force the room name to lowercase so everyone ends up in the same room
+String _baseUrl(String endpoint) => "$serverUrl/api/${roomName?.toLowerCase()}/$endpoint";
 
 Future<void> refreshLobby() async {
     if (roomName == null) return;
@@ -316,6 +316,7 @@ Future<void> refreshLobby() async {
 
     await http.post(
       Uri.parse(_baseUrl('join')),
+      headers: {'Content-Type': 'application/json'},
       body: jsonEncode({'name': _nameController.text}),
     );
     
