@@ -117,6 +117,61 @@ void main() async {
   }));
 });
 
+
+router.get('/api/<room>/reset', (Request request, String room) {
+  if (rooms.containsKey(room)) {
+    rooms[room] = {
+      'players': [],
+      'assignments': [],
+      'history': [],
+      'round': 0,
+      'maxRounds': 3,
+      'isFinished': false,
+      'pass': rooms[room]!['pass'], // Keep the same password
+    };
+    return Response.ok(jsonEncode({'status': 'reset successful'}));
+  }
+  return Response.notFound('Room not found');
+});
+
+router.get('/api/<room>/export', (Request request, String room) {
+  var r = getRoom(room);
+  List players = r['players'];
+  List history = r['history'];
+
+  StringBuffer report = StringBuffer();
+  report.writeln("--- TOURNAMENT REPORT: $room ---");
+  report.writeln("FINAL STANDINGS:");
+  
+  for (var p in players) {
+    report.writeln("${p['name']}: ${p['points']} pts (SoS: ${p['sos']})");
+  }
+
+  report.writeln("\nMATCH HISTORY:");
+  for (var entry in history) {
+    report.writeln("Round ${entry['round']} | Table ${entry['table']} | ${entry['player']} - Rank: ${entry['rank']}");
+  }
+
+  return Response.ok(report.toString());
+});
+
+router.post('/api/<room>/undo', (Request request, String room) async {
+  final data = jsonDecode(await request.readAsString());
+  var r = getRoom(room);
+  
+  // 1. Remove from history
+  r['history'].removeWhere((entry) => 
+    entry['player'] == data['playerName'] && 
+    entry['round'] == data['round']
+  );
+
+  // 2. Subtract points from the player
+  var player = r['players'].firstWhere((p) => p['name'] == data['playerName']);
+  player['points'] = (player['points'] as num) - (data['pointsToRemove'] as num);
+
+  return Response.ok(jsonEncode({'status': 'undone'}));
+});
+
 router.post('/api/<room>/report-result', (Request request, String room) async {
   final data = jsonDecode(await request.readAsString());
   var r = getRoom(room);
