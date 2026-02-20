@@ -1,38 +1,48 @@
-# ---------- BUILD STAGE ----------
-FROM dart:stable AS build
-
+# Stage 1: Build Flutter Web
+FROM ghcr.io/cirruslabs/flutter:stable AS web-build
 WORKDIR /app
 
-# 1. Copy the Root and all Member Pubspecs first
-# This is the "Skeleton" needed for Workspace resolution
+# Copy the "Skeleton" (All pubspecs)
 COPY pubspec.yaml ./
-COPY apps/server/pubspec.yaml ./apps/server/
 COPY apps/true_command/pubspec.yaml ./apps/true_command/
+COPY apps/server/pubspec.yaml ./apps/server/
 COPY packages/shared_logic/pubspec.yaml ./packages/shared_logic/
 
-# 2. Resolve dependencies for the WHOLE workspace at once
-# This prevents Exit Code 1 by letting Dart see all packages
+# Resolve dependencies for the whole workspace
+RUN flutter pub get
+
+# Copy source code and build the web app
+COPY apps/true_command/ ./apps/true_command/
+COPY packages/shared_logic/ ./packages/shared_logic/
+RUN cd apps/true_command && flutter build web --release
+
+# Stage 2: Build Dart Server
+FROM dart:stable AS server-build
+WORKDIR /app
+
+# Copy the "Skeleton" again (or reuse from previous stage if using same base)
+COPY pubspec.yaml ./
+COPY apps/server/pubspec.yaml ./apps/server/
+COPY packages/shared_logic/pubspec.yaml ./packages/shared_logic/
+
 RUN dart pub get
 
-# 3. Copy the actual source code
-COPY apps/server ./apps/server
-COPY apps/true_command ./apps/true_command
-COPY packages/shared_logic ./packages/shared_logic
-
-# 4. Compile the server
-# We run this from the root, pointing to the server entry point
+# Copy server source and compile
+COPY apps/server/ ./apps/server/
+COPY packages/shared_logic/ ./packages/shared_logic/
 RUN dart compile exe apps/server/bin/server.dart -o /app/server_bin
 
-# ---------- RUNTIME STAGE ----------
+# Stage 3: Final Runtime
 FROM debian:stable-slim
 WORKDIR /app
 
-# Copy the compiled binary and the runtime from the build stage
-COPY --from=build /runtime/ /
-COPY --from=build /app/server_bin ./server
+# Copy the compiled server and the web files
+COPY --from=server-build /runtime/ /
+COPY --from=server-build /app/server_bin ./server
+COPY --from=web-build /app/apps/true_command/build/web ./web_bundle
 
-# Expose the port Render expects
+# Set the environment variable for Render's port
+ENV PORT=8080
 EXPOSE 8080
 
-# Start the server
 CMD ["./server"]
