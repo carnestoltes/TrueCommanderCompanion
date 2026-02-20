@@ -153,8 +153,15 @@ void main() async {
 
   // ================= STATIC FLUTTER WEB =================
 
+ // ================= STATIC FLUTTER WEB =================
+
+  // 1. Detect the correct path
+  final String webPath = Directory('web_bundle').existsSync() 
+      ? 'web_bundle' 
+      : 'web';
+
   final staticHandler = createStaticHandler(
-    'web',
+    webPath,
     defaultDocument: 'index.html',
   );
 
@@ -164,7 +171,8 @@ void main() async {
       final response = await handler(request);
       if (response.statusCode == 404 &&
           !request.url.path.startsWith('api')) {
-        final file = File('web/index.html');
+        // Use the same webPath variable here!
+        final file = File('$webPath/index.html'); 
         if (await file.exists()) {
           return Response.ok(
             await file.readAsBytes(),

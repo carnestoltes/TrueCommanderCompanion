@@ -13,6 +13,7 @@ dependencies:
   dotenv: ^4.2.0
   shared_logic:
     path: ../../packages/shared_logic # This link is vital!
+  shelf_static: ^1.1.3
 
 dev_dependencies:
   http: ^1.2.2
