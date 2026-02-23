@@ -220,6 +220,8 @@ router.get('/api/<room>/reset', (Request request, String room) {
       'isFinished': false,
       'pass': rooms[room]!['pass'], // Keep the same password
     };
+    // 2. DELETE THE PHYSICAL FILE
+    deleteBackup();
     return Response.ok(jsonEncode({'status': 'reset successful'}));
   }
   return Response.notFound('Room not found');
