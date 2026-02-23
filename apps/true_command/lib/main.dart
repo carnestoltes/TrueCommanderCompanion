@@ -67,27 +67,27 @@ class _TournamentAppState extends State<TournamentApp> {
 String serverUrl = "https://truecommandercompanion.onrender.com"; 
   
   final TextEditingController _nameController = TextEditingController();
-  final TextEditingController _roomController = TextEditingController(); // NEW: For Room ID
+  final TextEditingController _roomController = TextEditingController(); 
+  final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _roundsController = TextEditingController(text: "3");
 
   bool hasSelectedRole = false;
   bool isAdmin = false;
   String? loggedInUser;
-  String? roomName; // NEW: Stores the current room
+  String? roomName; 
   String? currentAdminPassword;
 
   List<dynamic> players = [];
   List<dynamic> tableAssignments = [];
   List<dynamic> history = [];
   int currentRound = 0;
-  int maxRounds = 3;
-  int _currentIndex = 0;
-  String _searchQuery = "";
+  int _currentIndex = 0; 
   bool isFinished = false;
   Timer? _refreshTimer;
+  String _searchQuery = "";
+  String? _selectedRule;
 
   // --- TIE BREAK LOGIC ---
-String? _selectedRule;
 final List<String> _tieBreakRules = [
   "Total Life",
   "Priority Order",
@@ -119,7 +119,9 @@ void initState() {
   void dispose() {
     _refreshTimer?.cancel();
     _nameController.dispose();
-    //_roundsController.dispose();
+    _roomController.dispose(); // Add this
+    _passwordController.dispose(); // Add this
+    _roundsController.dispose(); // Uncomment this
     super.dispose();
   }
 
@@ -249,6 +251,61 @@ void _showJoinQR() {
   );
 }
 
+void _showBulkPasteDialog() {
+  TextEditingController pasteController = TextEditingController();
+
+  showDialog(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text("Paste Player List"),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text("Paste names separated by lines or commas:", 
+            style: TextStyle(fontSize: 12, color: Colors.grey)),
+          const SizedBox(height: 10),
+          TextField(
+            controller: pasteController,
+            maxLines: 10,
+            decoration: InputDecoration(
+              hintText: "Player 1\nPlayer 2\nPlayer 3...",
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
+        ElevatedButton(
+          onPressed: () async {
+            final rawText = pasteController.text;
+            if (rawText.isNotEmpty) {
+              // Splits by new lines OR commas
+              List<String> names = rawText
+                  .split(RegExp(r'[\n\r,]+')) 
+                  .map((name) => name.trim())
+                  .where((name) => name.isNotEmpty)
+                  .toList();
+
+              Navigator.pop(context); // Close dialog
+              
+              _showSnackBar("Adding ${names.length} players...", Colors.blue);
+
+              for (var name in names) {
+                await addPlayerToServer(name);
+              }
+              
+              _showSnackBar("Bulk add complete!", Colors.green);
+            }
+          },
+          child: const Text("Add All"),
+        ),
+      ],
+    ),
+  );
+}
+
+
 void massAddPlayers(String rawNames) {
   // Split by newline or comma, trim whitespace, and remove empty lines
   List<String> newNames = rawNames
@@ -265,6 +322,58 @@ void massAddPlayers(String rawNames) {
     }
   });
 }
+
+void _handleEntry() async {
+  final room = _roomController.text.trim();
+  final pass = _passwordController.text.trim();
+
+  if (room.isEmpty) {
+    _showSnackBar("Please enter a Tournament ID", Colors.red);
+    return;
+  }
+
+  roomName = room;
+
+  if (pass.isNotEmpty) {
+    // Attempt Admin Login
+    try {
+      final response = await http.post(
+        Uri.parse(_baseUrl('verify-admin')),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'password': pass}),
+      );
+
+      if (response.statusCode == 200) {
+        setState(() {
+          isAdmin = true;
+          hasSelectedRole = true;
+          loggedInUser = "Admin";
+          currentAdminPassword = pass;
+        });
+        refreshLobby();
+      } else {
+        _showSnackBar("Invalid Admin Password", Colors.orange);
+      }
+    } catch (e) {
+      _showSnackBar("Connection error", Colors.red);
+    }
+  } else {
+    // ENTER AS GUEST/VIEWER
+    setState(() {
+      isAdmin = false;
+      hasSelectedRole = true;
+      loggedInUser = "Viewer"; // No name needed for guests
+    });
+    refreshLobby();
+  }
+}
+
+  void _showSnackBar(String msg, Color color) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg), backgroundColor: color),
+    );
+  }
+
   // --- API CALLS ---
 
 // Force the room name to lowercase so everyone ends up in the same room
@@ -298,34 +407,11 @@ Future<void> refreshLobby() async {
     }
   }
 
-  Future<void> joinTournament() async {
-    if (_nameController.text.isEmpty || _roomController.text.isEmpty) {
-       ScaffoldMessenger.of(context).showSnackBar(
-         const SnackBar(content: Text("Enter both Name and Room ID"))
-       );
-       return;
-    }
-    
-    // Set the room name first
-    roomName = _roomController.text.trim();
-
-    await http.post(
-      Uri.parse(_baseUrl('join')),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'name': _nameController.text}),
-    );
-    
-    setState(() {
-      loggedInUser = _nameController.text;
-      hasSelectedRole = true;
-      isAdmin = false;
-    });
-    refreshLobby();
-  }
 
   Future<void> pickRosterFile() async {
+  if (roomName == null) return; // Safety check
+  
   try {
-    // 1. Open file picker (filter for .txt files)
     FilePickerResult? result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['txt'],
@@ -333,48 +419,28 @@ Future<void> refreshLobby() async {
 
     if (result != null) {
       String content = "";
-
       if (kIsWeb) {
-        // Handle Web
         final bytes = result.files.first.bytes;
-        if (bytes != null) content = String.fromCharCodes(bytes);
+        if (bytes != null) content = utf8.decode(bytes); // Better for UTF-8 names
       } else {
-        // Handle Android/iOS/Desktop
         final file = File(result.files.single.path!);
         content = await file.readAsString();
       }
 
-      // 2. Split content into lines and filter
       List<String> names = content
-          .split(RegExp(r'[\n\r]')) // Split by newline
-          .map((name) => name.trim()) // Remove whitespace
-          .where((name) => name.isNotEmpty) // Remove empty lines
+          .split(RegExp(r'[\n\r]'))
+          .map((name) => name.trim())
+          .where((name) => name.isNotEmpty)
           .toList();
 
-      // 3. Safety check for your 64 player limit
-      if (players.length + names.length > 64) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Error: Total players would exceed 64!")),
-        );
-        return;
-      }
-
-      // 4. Batch add to server
-      int count = 0;
       for (var name in names) {
         await addPlayerToServer(name);
-        count++;
       }
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Successfully added $count players!"), backgroundColor: Colors.green),
-      );
+      _showSnackBar("Successfully added ${names.length} players!", Colors.green);
     }
   } catch (e) {
-    debugPrint("File Pick Error: $e");
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("Failed to read file."), backgroundColor: Colors.red),
-    );
+    _showSnackBar("Failed to read file.", Colors.red);
   }
 }
 
@@ -668,136 +734,96 @@ void _confirmDeleteEntry(dynamic log) {
 
   // --- UI SCREENS ---
 
-void _showAdminPasswordDialog() {
-  String enteredPass = "";
-  showDialog(
-    context: context,
-    builder: (context) => AlertDialog(
-      title: const Text("Admin Login"),
-      content: TextField(
-        obscureText: true,
-        onChanged: (v) => enteredPass = v,
-        decoration: const InputDecoration(hintText: "admin123"),
-      ),
-      actions: [
-        ElevatedButton(
-          onPressed: () async {
-            // Ask the server if this password is correct
-            final response = await http.post(
-              Uri.parse(_baseUrl('verify-admin')),
-              body: jsonEncode({'password': enteredPass}),
-            );
-
-            if (response.statusCode == 200) {
-              setState(() {
-                isAdmin = true;
-                hasSelectedRole = true;
-                loggedInUser = "Admin";
-                currentAdminPassword = enteredPass; // Save it for later!
-              });
-              Navigator.pop(context);
-            } else {
-              // Show "Wrong Password" error
-            }
-          },
-          child: const Text("Login"),
-        )
-      ],
-    ),
-  );
-}
-
- Widget _buildRoleSelection() {
+Widget _buildRoleSelection() {
   return Scaffold(
+    backgroundColor: Colors.grey[50],
     body: Center(
-      child: SingleChildScrollView( // Added scroll view to prevent overflow on keyboard popup
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(32.0),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 400),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // --- LOGO FROM ASSETS ---
-              Image.asset(
-                'assets/logo.png',
-                height: 250, // Adjusted size
-                width: 400,
-                fit: BoxFit.contain,
-                // Fallback if image isn't found during setup
-                errorBuilder: (context, error, stackTrace) => 
-                  const Icon(Icons.style, size: 80, color: Colors.blueGrey),
+              // Visual Header
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Colors.blue.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.shield_moon, size: 80, color: Colors.blueAccent),
               ),
-              const SizedBox(height: 20),
-              
+              const SizedBox(height: 24),
               const Text(
-                "COMMANDER BEDH", 
-                style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+                "COMMANDER COMPANION", 
+                style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, letterSpacing: 1.2),
               ),
-              const SizedBox(height: 30),
+              const Text("Enter ID to view or Password to manage"),
+              const SizedBox(height: 40),
               
-              // NEW: Room ID Field
-                TextField(
-                  controller: _roomController,
-                  decoration: const InputDecoration(
-                    labelText: "Tournament Room Name (e.g. FridayMagic)",
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.meeting_room),
-                  ),
-                ),
-              const SizedBox(height: 15),
+              // Tournament ID (Room)
               TextField(
-                controller: _nameController,
-                decoration: const InputDecoration(
-                  labelText: "Your Player Name",
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.person),
+                controller: _roomController,
+                decoration: InputDecoration(
+                  labelText: "Tournament ID",
+                  hintText: "e.g., friday_night_magic",
+                  prefixIcon: const Icon(Icons.grid_view_rounded),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  filled: true,
+                  fillColor: Colors.white,
                 ),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 16),
 
-              const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: joinTournament,
-                      child: const Text("Join Tournament"),
-                    ),
-                  ),
-                  TextField(
-                    controller: _roomController,
-                    decoration: InputDecoration(
-                      labelText: "Tournament Room Name",
-                      border: const OutlineInputBorder(),
-                      prefixIcon: const Icon(Icons.meeting_room),
-                      suffixIcon: IconButton( // ADD THIS
-                        icon: const Icon(Icons.qr_code_scanner),
-                        onPressed: _scanJoinCode, 
-                      ),
-                    ),
-                  ),
-              
-             const Padding(padding: EdgeInsets.symmetric(vertical: 10), child: Text("OR")),
-                
-                TextButton.icon(
-                  icon: const Icon(Icons.admin_panel_settings, color: Colors.red),
-                  label: const Text("Administer Room", style: TextStyle(color: Colors.red)),
-                  onPressed: () {
-                    if (_roomController.text.isEmpty) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text("Enter a Room Name first"))
-                      );
-                    } else {
-                      roomName = _roomController.text.trim();
-                      _showAdminPasswordDialog();
-                    }
-                  }, 
+              // Admin Password
+              TextField(
+                controller: _passwordController,
+                obscureText: true,
+                decoration: InputDecoration(
+                  labelText: "Admin Password",
+                  hintText: "Leave blank to enter as viewer",
+                  prefixIcon: const Icon(Icons.lock_outline),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  filled: true,
+                  fillColor: Colors.white,
                 ),
-              ],
-            ),
+              ),
+              const SizedBox(height: 32),
+
+              // Single Entry Button
+              SizedBox(
+                width: double.infinity,
+                height: 55,
+                child: ElevatedButton(
+                  onPressed: _handleEntry,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blueAccent,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    elevation: 0,
+                  ),
+                  child: const Text("ENTER TOURNAMENT", 
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                ),
+              ),
+              const SizedBox(height: 24),
+              
+              const Text("— OR —", style: TextStyle(color: Colors.grey)),
+              
+              // QR Scan
+              TextButton.icon(
+                onPressed: _scanJoinCode,
+                icon: const Icon(Icons.qr_code_scanner),
+                label: const Text("Scan QR Code"),
+              ),
+            ],
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
 Widget _buildMainView() {
   if (isFinished) return _buildPodiumView();
@@ -851,11 +877,40 @@ Widget _buildMainView() {
           ),
           const Divider(),
 
-          // --- Manage Players Expansion ---
+         // --- Manage Players Expansion ---
           ExpansionTile(
             leading: const Icon(Icons.people_outline),
             title: Text("Manage Players (${players.length}/64)"),
             children: [
+              // Two buttons side-by-side for File and Paste
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Row(
+                  children: [
+                    // File Upload Button
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: pickRosterFile,
+                        icon: const Icon(Icons.upload_file),
+                        label: const Text("File (.txt)"),
+                        style: OutlinedButton.styleFrom(foregroundColor: Colors.blue),
+                      ),
+                    ),
+                    const SizedBox(width: 8), // Gap between buttons
+                    // Bulk Paste Button
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: _showBulkPasteDialog, // Calls the dialog function
+                        icon: const Icon(Icons.content_paste),
+                        label: const Text("Paste List"),
+                        style: OutlinedButton.styleFrom(foregroundColor: Colors.blue),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(height: 1),
+              
               // Search Bar
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -869,7 +924,8 @@ Widget _buildMainView() {
                   onChanged: (value) => setState(() => _searchQuery = value),
                 ),
               ),
-              // Add Player Row
+              
+              // Manual Add Field
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Row(
@@ -894,7 +950,8 @@ Widget _buildMainView() {
                 ),
               ),
               const Divider(),
-              // Filtered List
+              
+              // Player List (Keep your existing .where...map logic here)
               ...players
                   .where((p) => p['name']
                       .toString()
@@ -945,10 +1002,9 @@ Widget _buildMainView() {
   }
 
   // 2. ACTIVE TABLES VIEW
-  // We use a Column to show the Tie-Breaker rule at the top and the list below
   return Column(
     children: [
-      // --- THE TIE-BREAKER DISPLAY (Fixes "unused variable" warning) ---
+      // Tie-Breaker Banner
       if (_selectedRule != null)
         Container(
           width: double.infinity,
@@ -976,21 +1032,21 @@ Widget _buildMainView() {
           ),
         ),
 
-      // --- THE TABLES LIST ---
+      // Tables List with Scoring
       Expanded(
         child: ListView.builder(
           itemCount: tableAssignments.length,
           itemBuilder: (context, i) {
             var table = tableAssignments[i];
             int tableNumber = table['table'];
-            int tableSize = table['players'].length;
+            List<dynamic> tablePlayers = table['players'];
 
             return Card(
               margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               child: Column(
                 children: [
                   ListTile(
-                    title: Text("TABLE $tableNumber ($tableSize Players)", 
+                    title: Text("TABLE $tableNumber", 
                       style: const TextStyle(fontWeight: FontWeight.bold)),
                     tileColor: Colors.blueGrey.shade100,
                     trailing: isAdmin ? IconButton(
@@ -998,11 +1054,40 @@ Widget _buildMainView() {
                       onPressed: _generateRandomRule,
                     ) : null,
                   ),
-                  ...table['players'].map<Widget>((pName) {
+                  ...tablePlayers.map<Widget>((pName) {
                     bool isMe = pName == loggedInUser;
+                    
+                    // Check if player has already reported a score this round
+                    bool alreadyReported = history.any((log) => 
+                      log['player'] == pName && log['round'] == currentRound
+                    );
+
                     return ListTile(
                       title: Text(pName, 
-                        style: TextStyle(fontWeight: isMe ? FontWeight.bold : FontWeight.normal)),
+                        style: TextStyle(
+                          fontWeight: isMe ? FontWeight.bold : FontWeight.normal,
+                          color: alreadyReported ? Colors.grey : Colors.black
+                        )),
+                      // ADMIN SCORING BUTTONS
+                      trailing: isAdmin 
+                        ? Wrap(
+                            spacing: 4,
+                            children: [1, 2, 3, 4].map((rank) {
+                              // Standard point logic: 1st=4, 2nd=3, 3rd=2, 4th=1
+                              double pts = (5 - rank).toDouble();
+                              
+                              return ElevatedButton(
+                                style: ElevatedButton.styleFrom(
+                                  minimumSize: const Size(38, 38),
+                                  padding: EdgeInsets.zero,
+                                  backgroundColor: alreadyReported ? Colors.grey : _getRankColor(rank),
+                                ),
+                                onPressed: alreadyReported ? null : () => reportResult(pName, pts, rank, tableNumber),
+                                child: Text("$rankº", style: const TextStyle(color: Colors.white, fontSize: 12)),
+                              );
+                            }).toList(),
+                          )
+                        : (alreadyReported ? const Icon(Icons.check_circle, color: Colors.green) : null),
                     );
                   }).toList(),
                 ],
