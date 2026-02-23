@@ -461,7 +461,7 @@ void _showPendingSnackBar() {
   // --- API CALLS ---
 
 // Force the room name to lowercase so everyone ends up in the same room
-String _baseUrl(String endpoint) => "$serverUrl/api/${roomName?.toLowerCase()}/$endpoint";
+String _baseUrl(String endpoint) => "$serverUrl/api/$roomName/$endpoint";
 
 Future<void> refreshLobby() async {
     if (roomName == null) return;
@@ -651,34 +651,22 @@ Future<void> reportResult(String pName, num points, int rank, int tableId) async
  }
 
 Future<void> startNextRound() async {
-  if (currentRound >= maxRounds) {
-    _finishTournament();
-    return;
-  }
-
-  _showSnackBar("Starting Tournament... please wait", Colors.blue);
-
   try {
+    // Note: The endpoint on your server is actually 'start'
     final response = await http.post(
-      Uri.parse(_baseUrl('next-round')),
+      Uri.parse(_baseUrl('start')), 
       headers: {"Content-Type": "application/json"},
-      body: jsonEncode({
-        'adminPassword': currentAdminPassword,
-        'roomName': roomName,
-        'totalRounds': maxRounds,
-      }),
-    ).timeout(const Duration(seconds: 15)); // Give the server 15 seconds to group 64 players
+      body: jsonEncode({'adminPassword': currentAdminPassword}),
+    );
 
     if (response.statusCode == 200) {
       await refreshLobby();
-      setState(() => _currentIndex = 0); 
     } else {
-      final error = jsonDecode(response.body)['error'] ?? "Failed to start";
+      final error = jsonDecode(response.body)['error'];
       _showSnackBar(error, Colors.red);
     }
   } catch (e) {
-    print("Full Error: $e");
-    _showSnackBar("Network Error: Server took too long or is offline", Colors.red);
+    _showSnackBar("Connection Error: Check if server is running on :8080", Colors.red);
   }
 }
 
@@ -933,6 +921,7 @@ Widget _buildRoleSelection() {
 
 Widget _buildMainView() {
   if (isFinished) return _buildPodiumView();
+  final activePlayers = players.where((p) => p['isDropped'] != true).toList();
 
   // 1. LOBBY VIEW (When no round is active)
   if (tableAssignments.isEmpty) {
@@ -1073,7 +1062,7 @@ Widget _buildMainView() {
               const Divider(),
               
               // Player List (Keep your existing .where...map logic here)
-              ...players
+              ...activePlayers
                   .where((p) => p['name']
                       .toString()
                       .toLowerCase()
@@ -1156,9 +1145,9 @@ Widget _buildMainView() {
 
       // Tables List with Scoring
       Expanded(
-  child: ListView.builder(
-    itemCount: tableAssignments.length,
-    itemBuilder: (context, i) {
+      child: ListView.builder(
+      itemCount: tableAssignments.length,
+      itemBuilder: (context, i) {
       var table = tableAssignments[i];
       int tableNumber = table['table'];
       List<String> tablePlayers = List<String>.from(table['players']);
