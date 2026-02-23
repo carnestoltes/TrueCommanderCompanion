@@ -754,21 +754,24 @@ Future<void> removePlayerFromServer(String name) async {
       body: jsonEncode({
         'name': name,
         'adminPassword': currentAdminPassword,
+        'roomName': roomName, // Ensure roomName is here too
       }),
     );
     
     if (response.statusCode == 200) {
-      // 1. Remove locally immediately
+      // 1. Remove it from the local list so it disappears from screen immediately
       setState(() {
         players.removeWhere((p) => p['name'] == name);
       });
-      // 2. Wait a split second for the server to update database
-      await Future.delayed(const Duration(milliseconds: 500));
-      // 3. Force a fresh sync
+      
+      // 2. Wait slightly for the database to commit the change
+      await Future.delayed(const Duration(milliseconds: 300));
+      
+      // 3. Sync one last time to be sure
       await refreshLobby(); 
     }
   } catch (e) {
-    debugPrint("Delete error: $e");
+    _showSnackBar("Could not connect to server to delete.", Colors.red);
   }
 }
 
