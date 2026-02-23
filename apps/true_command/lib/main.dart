@@ -656,27 +656,29 @@ Future<void> startNextRound() async {
     return;
   }
 
+  _showSnackBar("Starting Tournament... please wait", Colors.blue);
+
   try {
     final response = await http.post(
       Uri.parse(_baseUrl('next-round')),
       headers: {"Content-Type": "application/json"},
       body: jsonEncode({
         'adminPassword': currentAdminPassword,
-        'roomName': roomName, // CRITICAL: Server needs to know WHICH room
-        'maxRounds': maxRounds, // Send your lobby setting to the server
+        'roomName': roomName,
+        'totalRounds': maxRounds,
       }),
-    );
+    ).timeout(const Duration(seconds: 15)); // Give the server 15 seconds to group 64 players
 
     if (response.statusCode == 200) {
       await refreshLobby();
-      _showSnackBar("Round Started!", Colors.green);
+      setState(() => _currentIndex = 0); 
     } else {
-      // Decode the error from the server to see what's wrong
-      final errorData = jsonDecode(response.body);
-      _showSnackBar("Server Error: ${errorData['error']}", Colors.red);
+      final error = jsonDecode(response.body)['error'] ?? "Failed to start";
+      _showSnackBar(error, Colors.red);
     }
   } catch (e) {
-    _showSnackBar("Connection Error. Check your internet.", Colors.red);
+    print("Full Error: $e");
+    _showSnackBar("Network Error: Server took too long or is offline", Colors.red);
   }
 }
 
@@ -747,6 +749,9 @@ Future<void> addPlayerToServer(String name) async {
 }
 
 Future<void> removePlayerFromServer(String name) async {
+  // 1. Locally remove immediately for a snappy UI
+  setState(() => players.removeWhere((p) => p['name'] == name));
+
   try {
     final response = await http.post(
       Uri.parse(_baseUrl('remove-player')),
@@ -754,24 +759,17 @@ Future<void> removePlayerFromServer(String name) async {
       body: jsonEncode({
         'name': name,
         'adminPassword': currentAdminPassword,
-        'roomName': roomName, // Ensure roomName is here too
+        'roomName': roomName, // Ensure the server knows which lobby
       }),
     );
-    
+
     if (response.statusCode == 200) {
-      // 1. Remove it from the local list so it disappears from screen immediately
-      setState(() {
-        players.removeWhere((p) => p['name'] == name);
-      });
-      
-      // 2. Wait slightly for the database to commit the change
-      await Future.delayed(const Duration(milliseconds: 300));
-      
-      // 3. Sync one last time to be sure
+      // Wait a moment for the server database to persist the change
+      await Future.delayed(const Duration(milliseconds: 500));
       await refreshLobby(); 
     }
   } catch (e) {
-    _showSnackBar("Could not connect to server to delete.", Colors.red);
+    _showSnackBar("Connection error while deleting", Colors.red);
   }
 }
 
