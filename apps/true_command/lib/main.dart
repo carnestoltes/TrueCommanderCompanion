@@ -251,6 +251,71 @@ void _showJoinQR() {
   );
 }
 
+void _showTableResultDialog(int tableId, List<String> tablePlayers) {
+  // Logic: {Rank: PlayerName}
+  Map<int, String?> assignments = {1: null, 2: null, 3: null, 4: null};
+
+  showDialog(
+    context: context,
+    barrierDismissible: false, // Prevent accidental closing
+    builder: (context) => StatefulBuilder(
+      builder: (context, setDialogState) => AlertDialog(
+        title: Text("Table $tableId Assignments"),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [1, 2, 3, 4].map((rank) {
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8.0),
+                child: DropdownButtonFormField<String>(
+                  decoration: InputDecoration(
+                    labelText: "Rank $rank",
+                    filled: true,
+                    fillColor: _getRankColor(rank).withOpacity(0.1),
+                    border: const OutlineInputBorder(),
+                  ),
+                  value: assignments[rank],
+                  items: tablePlayers.map((p) {
+                    // BLOCKING LOGIC: Disable name if picked in a DIFFERENT dropdown
+                    bool isAlreadyPickedElsewhere = assignments.entries.any((entry) => entry.key != rank && entry.value == p);
+                    
+                    return DropdownMenuItem(
+                      value: p,
+                      enabled: !isAlreadyPickedElsewhere,
+                      child: Text(p, style: TextStyle(
+                        color: isAlreadyPickedElsewhere ? Colors.grey : Colors.black
+                      )),
+                    );
+                  }).toList(),
+                  onChanged: (val) {
+                    setDialogState(() => assignments[rank] = val);
+                  },
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
+          ElevatedButton(
+            // Only enable if all 4 ranks have a unique player assigned
+            onPressed: assignments.values.any((v) => v == null) 
+              ? null 
+              : () async {
+                  Navigator.pop(context);
+                  for (var entry in assignments.entries) {
+                    double pts = (5 - entry.key).toDouble();
+                    await reportResult(entry.value!, pts, entry.key, tableId);
+                  }
+                },
+            child: const Text("Save Table"),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
 void _showBulkPasteDialog() {
   TextEditingController pasteController = TextEditingController();
 
@@ -407,6 +472,24 @@ Future<void> refreshLobby() async {
     }
   }
 
+Future<void> _finishTournament() async {
+  try {
+    final response = await http.post(
+      Uri.parse(_baseUrl('finish-tournament')),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({'adminPassword': currentAdminPassword}),
+    );
+
+    if (response.statusCode == 200) {
+      setState(() {
+        isFinished = true;
+      });
+      _showSnackBar("Tournament Highly Successful! Checking final scores...", Colors.yellowAccent);
+    }
+  } catch (e) {
+    _showSnackBar("Error finishing tournament", Colors.red);
+  }
+}
 
   Future<void> pickRosterFile() async {
   if (roomName == null) return; // Safety check
@@ -549,48 +632,27 @@ Future<void> reportResult(String pName, num points, int rank, int tableId) async
  }
 
 Future<void> startNextRound() async {
-    try {
-      final response = await http.post(
-        Uri.parse(_baseUrl('start')),
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode({
-          'maxRounds': int.tryParse(_roundsController.text) ?? 3,
-          'isAdmin': true,
-          'adminPassword': currentAdminPassword
-        }),
-      ).timeout(const Duration(seconds: 5));
-
-      if (response.statusCode == 200) {
-        refreshLobby();
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Round Started!"), backgroundColor: Colors.green),
-        );
-      } else {
-        // --- NEW: Handle the JSON error message from the server ---
-        String errorMessage;
-        try {
-          final data = jsonDecode(response.body);
-          errorMessage = data['error'] ?? "Server Denied: ${response.body}";
-        } catch (e) {
-          // Fallback if the response isn't JSON
-          errorMessage = "Server error: ${response.statusCode}";
-        }
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(errorMessage), 
-            backgroundColor: Colors.orange,
-            duration: const Duration(seconds: 4), // Give them time to read the name
-          ),
-        );
-      }
-    } catch (e) {
-      debugPrint("Error Details: $e");
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Network Error: Is the server still running?"), backgroundColor: Colors.red),
-      );
-    }
+  // If we just finished Round 3, we should close the tournament instead of starting Round 4
+  if (currentRound >= 3) {
+    _finishTournament();
+    return;
   }
+
+  try {
+    final response = await http.post(
+      Uri.parse(_baseUrl('next-round')),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({'adminPassword': currentAdminPassword}),
+    );
+
+    if (response.statusCode == 200) {
+      _showSnackBar("Round ${currentRound + 1} Started!", Colors.green);
+      await refreshLobby(); // This will update currentRound locally
+    }
+  } catch (e) {
+    _showSnackBar("Error starting next round", Colors.red);
+  }
+}
 
  Future<void> resetTournament() async {
   try {
@@ -661,15 +723,26 @@ Future<void> addPlayerToServer(String name) async {
 Future<void> removePlayerFromServer(String name) async {
   try {
     final response = await http.post(
-      Uri.parse(_baseUrl('remove-player')), // You'll need this endpoint on your server
+      Uri.parse(_baseUrl('remove-player')),
       headers: {"Content-Type": "application/json"},
       body: jsonEncode({
         'name': name,
         'adminPassword': currentAdminPassword,
       }),
     );
+    
     if (response.statusCode == 200) {
-      refreshLobby();
+      // Option A: Force an immediate local UI update
+      setState(() {
+        players.removeWhere((p) => p['name'] == name);
+      });
+      
+      // Option B: Sync with server to ensure everything is perfect
+      await refreshLobby(); 
+      
+      _showSnackBar("Player $name removed", Colors.green);
+    } else {
+      _showSnackBar("Failed to remove player", Colors.red);
     }
   } catch (e) {
     debugPrint("Remove Error: $e");
@@ -747,16 +820,22 @@ Widget _buildRoleSelection() {
             children: [
               // Visual Header
               Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: Colors.blue.withOpacity(0.1),
-                  shape: BoxShape.circle,
+                padding: const EdgeInsets.all(10),
+                  child: Image.asset(
+                    'assets/logo.png', // Ensure this matches your file name exactly
+                    width: 250,        // Adjust width to fit your design
+                    height: 200,       // Adjust height to fit your design
+                    fit: BoxFit.contain,
+                    // This part prevents the app from crashing if you haven't 
+                    // added the image to pubspec.yaml yet:
+                    errorBuilder: (context, error, stackTrace) {
+                      return const Icon(Icons.shield_moon, size: 80, color: Colors.blueAccent);
+                    },
+                  ),
                 ),
-                child: const Icon(Icons.shield_moon, size: 80, color: Colors.blueAccent),
-              ),
               const SizedBox(height: 24),
               const Text(
-                "COMMANDER COMPANION", 
+                "COMMANDER BEDH", 
                 style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, letterSpacing: 1.2),
               ),
               const Text("Enter ID to view or Password to manage"),
@@ -958,6 +1037,7 @@ Widget _buildMainView() {
                       .toLowerCase()
                       .contains(_searchQuery.toLowerCase()))
                   .map((p) => ListTile(
+                        key: ValueKey(p['name']), // Helps Flutter track the item during deletion
                         dense: true,
                         title: Text(p['name']),
                         trailing: IconButton(
@@ -965,7 +1045,7 @@ Widget _buildMainView() {
                           onPressed: () => _confirmRemovePlayer(p['name']),
                         ),
                       ))
-                  .toList(),
+                  //.toList(),
             ],
           ),
         ],
@@ -1034,62 +1114,72 @@ Widget _buildMainView() {
 
       // Tables List with Scoring
       Expanded(
-        child: ListView.builder(
-          itemCount: tableAssignments.length,
-          itemBuilder: (context, i) {
-            var table = tableAssignments[i];
-            int tableNumber = table['table'];
-            List<dynamic> tablePlayers = table['players'];
+  child: ListView.builder(
+    itemCount: tableAssignments.length,
+    itemBuilder: (context, i) {
+      var table = tableAssignments[i];
+      int tableNumber = table['table'];
+      List<String> tablePlayers = List<String>.from(table['players']);
 
-            return Card(
-              margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              child: Column(
+      // Check if the WHOLE table is finished
+      bool tableDone = tablePlayers.every((p) => 
+        history.any((log) => log['player'] == p && log['round'] == currentRound)
+      );
+
+      return Card(
+        margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        child: Column(
+          children: [
+            ListTile(
+              title: Text("TABLE $tableNumber", 
+                style: const TextStyle(fontWeight: FontWeight.bold)),
+              tileColor: tableDone ? Colors.green.shade50 : Colors.blueGrey.shade100,
+              trailing: isAdmin ? Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  ListTile(
-                    title: Text("TABLE $tableNumber", 
-                      style: const TextStyle(fontWeight: FontWeight.bold)),
-                    tileColor: Colors.blueGrey.shade100,
-                    trailing: isAdmin ? IconButton(
-                      icon: const Icon(Icons.casino, color: Colors.blueGrey),
-                      onPressed: _generateRandomRule,
-                    ) : null,
+                  // Random Rule Icon
+                  IconButton(
+                    icon: const Icon(Icons.casino, color: Colors.blueGrey),
+                    onPressed: _generateRandomRule,
                   ),
-                  ...tablePlayers.map<Widget>((pName) {
-                    bool isMe = pName == loggedInUser;
-                    
-                    // Check if player has already reported a score this round
-                    bool alreadyReported = history.any((log) => 
-                      log['player'] == pName && log['round'] == currentRound
-                    );
+                  // THE NEW REPORT BUTTON
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: tableDone ? Colors.grey : Colors.blueAccent,
+                    ),
+                    onPressed: tableDone ? null : () => _showTableResultDialog(tableNumber, tablePlayers),
+                    child: Text(tableDone ? "Finished" : "Report Results"),
+                  ),
+                ],
+              ) : null,
+            ),
+            ...tablePlayers.map<Widget>((pName) {
+              bool isMe = pName == loggedInUser;
+              
+              // Find this specific player's rank in history if it exists
+              var playerLog = history.firstWhere(
+                (log) => log['player'] == pName && log['round'] == currentRound,
+                orElse: () => null,
+              );
 
-                    return ListTile(
-                      title: Text(pName, 
-                        style: TextStyle(
-                          fontWeight: isMe ? FontWeight.bold : FontWeight.normal,
-                          color: alreadyReported ? Colors.grey : Colors.black
-                        )),
-                      // ADMIN SCORING BUTTONS
-                      trailing: isAdmin 
-                        ? Wrap(
-                            spacing: 4,
-                            children: [1, 2, 3, 4].map((rank) {
-                              // Standard point logic: 1st=4, 2nd=3, 3rd=2, 4th=1
-                              double pts = (5 - rank).toDouble();
-                              
-                              return ElevatedButton(
-                                style: ElevatedButton.styleFrom(
-                                  minimumSize: const Size(38, 38),
-                                  padding: EdgeInsets.zero,
-                                  backgroundColor: alreadyReported ? Colors.grey : _getRankColor(rank),
-                                ),
-                                onPressed: alreadyReported ? null : () => reportResult(pName, pts, rank, tableNumber),
-                                child: Text("$rankº", style: const TextStyle(color: Colors.white, fontSize: 12)),
-                              );
-                            }).toList(),
-                          )
-                        : (alreadyReported ? const Icon(Icons.check_circle, color: Colors.green) : null),
-                    );
-                  }).toList(),
+              return ListTile(
+                title: Text(pName, 
+                  style: TextStyle(
+                    fontWeight: isMe ? FontWeight.bold : FontWeight.normal,
+                    color: playerLog != null ? Colors.grey : Colors.black
+                  )),
+                trailing: playerLog != null 
+                  ? Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: _getRankColor(playerLog['rank']),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text("${playerLog['rank']}º", style: const TextStyle(color: Colors.white)),
+                    )
+                  : const Icon(Icons.pending_outlined, color: Colors.orange),
+              );
+              })//.toList(),
                 ],
               ),
             );
@@ -1101,51 +1191,66 @@ Widget _buildMainView() {
 }
 
 
-  @override
-  Widget build(BuildContext context) {
-    if (!hasSelectedRole) return _buildRoleSelection();
+@override
+Widget build(BuildContext context) {
+  // 1. If we haven't logged in/selected a room yet
+  if (!hasSelectedRole) return _buildRoleSelection();
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(isAdmin ? "Admin Console" : "Tournament Info"),
-        backgroundColor: isAdmin ? Colors.redAccent.shade700 : Colors.blueGrey,
-        leading: IconButton(
-          icon: const Icon(Icons.logout),
-          onPressed: () => setState(() => hasSelectedRole = false),
+  return Scaffold(
+    appBar: AppBar(
+      title: Text(isAdmin ? "Admin Console" : "Tournament Info"),
+      backgroundColor: isAdmin ? Colors.redAccent.shade700 : Colors.blueGrey,
+      leading: IconButton(
+        icon: const Icon(Icons.logout),
+        onPressed: () {
+          setState(() {
+            hasSelectedRole = false;
+            isAdmin = false;
+          });
+        },
+      ),
+      actions: [
+        if (isAdmin) IconButton(
+          icon: const Icon(Icons.delete_forever), 
+          onPressed: _confirmReset
         ),
-        actions: [
-          if (isAdmin) IconButton(icon: const Icon(Icons.delete_forever), onPressed: _confirmReset),
-        ],
-      ),
-      body: _currentIndex == 0 ? _buildMainView() : _buildHistoryView(),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _currentIndex,
-        onTap: (index) => setState(() => _currentIndex = index),
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.table_chart), label: "Tables"),
-          BottomNavigationBarItem(icon: Icon(Icons.history), label: "History"),
-        ],
-      ),
-      floatingActionButton: (isAdmin && _currentIndex == 0 && !isFinished)
-          ? FloatingActionButton(
-              // If results are missing, show a SnackBar instead of calling the API
-              onPressed: _allResultsIn() 
-                  ? startNextRound 
-                  : () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text("Cannot start next round: Some players haven't reported results!"),
-                          backgroundColor: Colors.orange,
-                        ),
-                      );
-                    },
-              // Visual cue: Red for "Go", Grey for "Wait"
-              backgroundColor: _allResultsIn() ? Colors.redAccent : Colors.grey,
-              child: const Icon(Icons.play_arrow),
-            )
-          : null,
-    );
-  }
+      ],
+    ),
+    
+    // 2. The Body: If the tournament is finished, show the Podium. 
+    // Otherwise, toggle between Tables and History.
+    body: isFinished 
+        ? _buildPodiumView() 
+        : (_currentIndex == 0 ? _buildMainView() : _buildHistoryView()),
+
+    bottomNavigationBar: BottomNavigationBar(
+      currentIndex: _currentIndex,
+      onTap: (index) => setState(() => _currentIndex = index),
+      items: const [
+        BottomNavigationBarItem(icon: Icon(Icons.table_chart), label: "Tables"),
+        BottomNavigationBarItem(icon: Icon(Icons.history), label: "History"),
+      ],
+    ),
+
+    // 3. Floating Action Button: Changes behavior based on the Round
+    floatingActionButton: (isAdmin && _currentIndex == 0 && !isFinished)
+        ? FloatingActionButton(
+            onPressed: _allResultsIn() 
+                ? startNextRound // This function now handles the 3-round limit logic
+                : () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text("Cannot proceed: Some tables haven't finished!"),
+                        backgroundColor: Colors.orange,
+                      ),
+                    );
+                  },
+            backgroundColor: _allResultsIn() ? Colors.redAccent : Colors.grey,
+            child: Icon(currentRound >= 3 ? Icons.emoji_events : Icons.play_arrow),
+          )
+        : null,
+  );
+}
 
   Widget _buildPodiumView() {
   // Sort by points for the final display
