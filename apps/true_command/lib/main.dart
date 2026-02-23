@@ -879,8 +879,8 @@ Widget _buildRoleSelection() {
                 padding: const EdgeInsets.all(10),
                   child: Image.asset(
                     'assets/logo.png', // Ensure this matches your file name exactly
-                    width: 250,        // Adjust width to fit your design
-                    height: 200,       // Adjust height to fit your design
+                    width: 350,        // Adjust width to fit your design
+                    height: 300,       // Adjust height to fit your design
                     fit: BoxFit.contain,
                     // This part prevents the app from crashing if you haven't 
                     // added the image to pubspec.yaml yet:
