@@ -82,6 +82,7 @@ String serverUrl = "https://truecommandercompanion.onrender.com";
   List<dynamic> history = [];
   int currentRound = 0;
   int _currentIndex = 0; 
+  int maxRounds = 3; 
   bool isFinished = false;
   Timer? _refreshTimer;
   String _searchQuery = "";
@@ -125,22 +126,24 @@ void initState() {
     super.dispose();
   }
 
-  bool _allResultsIn() {
-    // If no round has started yet, we are ready to start Round 1
-    if (tableAssignments.isEmpty) return true;
-
-    // 1. Get a list of every player name currently assigned to a table
-    List<String> assignedPlayers = [];
-    for (var table in tableAssignments) {
-      if (table['players'] != null) {
-        assignedPlayers.addAll(List<String>.from(table['players']));
-      }
-    }
-    // 2. Check if every one of those players exists in the history for the current round
-    return assignedPlayers.every((pName) => 
-      history.any((log) => log['player'] == pName && log['round'] == currentRound)
-    );
+ bool _allResultsIn() {
+  // If we are in the lobby (Round 0), we can start if we have enough players
+  if (currentRound == 0) {
+    return players.length >= 4; // Need at least one table to start
   }
+
+  // If a round is active, check if every player has a score in history for THIS round
+  for (var table in tableAssignments) {
+    List<dynamic> tablePlayers = table['players'];
+    for (var pName in tablePlayers) {
+      bool hasScore = history.any((log) => 
+        log['player'] == pName && log['round'] == currentRound
+      );
+      if (!hasScore) return false; // Found a player without a score
+    }
+  }
+  return true; 
+}
  
   // 2. Revised Password Dialog
   void _showChangePasswordDialog() {
@@ -439,6 +442,22 @@ void _handleEntry() async {
     );
   }
 
+void _showPendingSnackBar() {
+  ScaffoldMessenger.of(context).showSnackBar(
+    const SnackBar(
+      content: Row(
+        children: [
+          Icon(Icons.warning_amber_rounded, color: Colors.white),
+          SizedBox(width: 10),
+          Expanded(child: Text("Cannot proceed: Some tables have not reported all results!")),
+        ],
+      ),
+      backgroundColor: Colors.orange,
+      duration: Duration(seconds: 2),
+    ),
+  );
+}
+
   // --- API CALLS ---
 
 // Force the room name to lowercase so everyone ends up in the same room
@@ -632,8 +651,8 @@ Future<void> reportResult(String pName, num points, int rank, int tableId) async
  }
 
 Future<void> startNextRound() async {
-  // If we just finished Round 3, we should close the tournament instead of starting Round 4
-  if (currentRound >= 3) {
+  // If the current round is the one we set in the lobby, finish it!
+  if (currentRound >= maxRounds) {
     _finishTournament();
     return;
   }
@@ -642,15 +661,18 @@ Future<void> startNextRound() async {
     final response = await http.post(
       Uri.parse(_baseUrl('next-round')),
       headers: {"Content-Type": "application/json"},
-      body: jsonEncode({'adminPassword': currentAdminPassword}),
+      body: jsonEncode({
+        'adminPassword': currentAdminPassword,
+        // We can pass the maxRounds to the server here if your backend needs it
+        'totalRounds': maxRounds, 
+      }),
     );
 
     if (response.statusCode == 200) {
-      _showSnackBar("Round ${currentRound + 1} Started!", Colors.green);
-      await refreshLobby(); // This will update currentRound locally
+      await refreshLobby();
     }
   } catch (e) {
-    _showSnackBar("Error starting next round", Colors.red);
+    _showSnackBar("Error moving to next round", Colors.red);
   }
 }
 
@@ -749,25 +771,28 @@ Future<void> removePlayerFromServer(String name) async {
   }
 }
 
-void _confirmRemovePlayer(String name) {
-  showDialog(
+Future<void> _confirmRemovePlayer(String name) async {
+  // Show a quick confirmation dialog first
+  bool confirm = await showDialog(
     context: context,
     builder: (context) => AlertDialog(
       title: const Text("Remove Player?"),
-      content: Text("Do you want to remove $name? They will not be paired in future rounds."),
+      content: Text("Are you sure you want to remove $name?"),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
-        ElevatedButton(
-          onPressed: () {
-            removePlayerFromServer(name);
-            Navigator.pop(context);
-          },
-          child: const Text("Remove"),
-        ),
+        TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Cancel")),
+        TextButton(onPressed: () => Navigator.pop(context, true), child: const Text("Remove", style: TextStyle(color: Colors.red))),
       ],
     ),
-  );
+  ) ?? false;
+
+  if (confirm) {
+    await removePlayerFromServer(name);
+    // CRITICAL: Immediately refresh the list so they disappear
+    await refreshLobby(); 
+    setState(() {}); 
+  }
 }
+
   void _generateRandomRule() {
   setState(() {
     _selectedRule = _tieBreakRules[Random().nextInt(_tieBreakRules.length)];
@@ -926,17 +951,32 @@ Widget _buildMainView() {
       children: [
         if (isAdmin) ...[
           // --- Round Settings ---
-          Card(
-            margin: const EdgeInsets.all(16.0),
-            child: ListTile(
-              leading: const Icon(Icons.repeat, color: Colors.blue),
-              title: TextField(
-                controller: _roundsController,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: "Set Total Rounds"),
+          if (currentRound == 0) 
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Row(
+                children: [
+                  const Icon(Icons.timer, color: Colors.blueGrey),
+                  const SizedBox(width: 12),
+                  const Text("Total Rounds:", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  const SizedBox(width: 20),
+                  SizedBox(
+                    width: 60,
+                    child: TextField(
+                      controller: _roundsController,
+                      keyboardType: TextInputType.number,
+                      textAlign: TextAlign.center,
+                      decoration: const InputDecoration(isDense: true),
+                      onChanged: (val) {
+                        setState(() {
+                          maxRounds = int.tryParse(val) ?? 3;
+                        });
+                      },
+                    ),
+                  ),
+                ],
               ),
             ),
-          ),
           
           // --- Admin Actions ---
           Row(
@@ -1234,21 +1274,13 @@ Widget build(BuildContext context) {
 
     // 3. Floating Action Button: Changes behavior based on the Round
     floatingActionButton: (isAdmin && _currentIndex == 0 && !isFinished)
-        ? FloatingActionButton(
-            onPressed: _allResultsIn() 
-                ? startNextRound // This function now handles the 3-round limit logic
-                : () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text("Cannot proceed: Some tables haven't finished!"),
-                        backgroundColor: Colors.orange,
-                      ),
-                    );
-                  },
-            backgroundColor: _allResultsIn() ? Colors.redAccent : Colors.grey,
-            child: Icon(currentRound >= 3 ? Icons.emoji_events : Icons.play_arrow),
-          )
-        : null,
+    ? FloatingActionButton(
+        onPressed: _allResultsIn() ? startNextRound : _showPendingSnackBar,
+        backgroundColor: _allResultsIn() ? Colors.redAccent : Colors.grey,
+        // Shows Trophy only when you reach the number defined in the lobby
+        child: Icon(currentRound >= maxRounds ? Icons.emoji_events : Icons.play_arrow),
+      )
+    : null,
   );
 }
 
