@@ -230,7 +230,6 @@ router.get('/api/<room>/reset', (Request request, String room) {
 router.get('/api/<room>/export', (Request request, String room) {
   var r = getRoom(room);
   List players = r['players'];
-  List history = r['history'];
 
   StringBuffer report = StringBuffer();
   report.writeln("--- TOURNAMENT REPORT: $room ---");
@@ -238,11 +237,6 @@ router.get('/api/<room>/export', (Request request, String room) {
   
   for (var p in players) {
     report.writeln("${p['name']}: ${p['points']} pts (SoS: ${p['sos']})");
-  }
-
-  report.writeln("\nMATCH HISTORY:");
-  for (var entry in history) {
-    report.writeln("Round ${entry['round']} | Table ${entry['table']} | ${entry['player']} - Rank: ${entry['rank']}");
   }
 
   return Response.ok(report.toString());

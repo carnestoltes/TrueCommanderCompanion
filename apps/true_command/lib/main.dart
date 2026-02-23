@@ -944,14 +944,14 @@ Widget _buildRoleSelection() {
               ),
               const SizedBox(height: 24),
               
-              const Text("— OR —", style: TextStyle(color: Colors.grey)),
+              /*const Text("— OR —", style: TextStyle(color: Colors.grey)),
               
               // QR Scan
               TextButton.icon(
                 onPressed: _scanJoinCode,
                 icon: const Icon(Icons.qr_code_scanner),
                 label: const Text("Scan QR Code"),
-              ),
+              ),*/
             ],
           ),
         ),
@@ -966,7 +966,7 @@ Widget _buildMainView() {
 
   // 1. LOBBY VIEW (When no round is active)
   if (tableAssignments.isEmpty) {
-    List<dynamic> sortedPlayers = List.from(players);
+    List<dynamic> sortedPlayers = List.from(activePlayers);
     sortedPlayers.sort((a, b) {
       num pA = a['points'] ?? 0;
       num pB = b['points'] ?? 0;
