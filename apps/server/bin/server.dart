@@ -436,7 +436,7 @@ router.post('/api/<room>/start', (Request request, String room) async {
       .addHandler(spaFallback(cascade));
 
   final port = int.parse(Platform.environment['PORT'] ?? '8080');
-  final server = await io.serve(handler, InternetAddress.anyIPv4, port);
+  await io.serve(handler, InternetAddress.anyIPv4, port);
 
   //await io.serve(handler, '0.0.0.0', port);
   print('Server running on port $port');
