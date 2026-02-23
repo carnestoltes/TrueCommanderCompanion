@@ -255,19 +255,25 @@ void _showJoinQR() {
 }
 
 void _showTableResultDialog(int tableId, List<String> tablePlayers) {
-  // Logic: {Rank: PlayerName}
-  Map<int, String?> assignments = {1: null, 2: null, 3: null, 4: null};
+  final int playerCount = tablePlayers.length;
+  // Initialize assignments based on the actual number of players (3 or 4)
+  Map<int, String?> assignments = {};
+  for (int i = 1; i <= playerCount; i++) {
+    assignments[i] = null;
+  }
 
   showDialog(
     context: context,
-    barrierDismissible: false, // Prevent accidental closing
+    barrierDismissible: false,
     builder: (context) => StatefulBuilder(
       builder: (context, setDialogState) => AlertDialog(
-        title: Text("Table $tableId Assignments"),
+        title: Text("Table $tableId Results ($playerCount Players)"),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
-            children: [1, 2, 3, 4].map((rank) {
+            // Only generate rows for the players actually at the table
+            children: List.generate(playerCount, (index) {
+              int rank = index + 1;
               return Padding(
                 padding: const EdgeInsets.symmetric(vertical: 8.0),
                 child: DropdownButtonFormField<String>(
@@ -279,8 +285,8 @@ void _showTableResultDialog(int tableId, List<String> tablePlayers) {
                   ),
                   value: assignments[rank],
                   items: tablePlayers.map((p) {
-                    // BLOCKING LOGIC: Disable name if picked in a DIFFERENT dropdown
-                    bool isAlreadyPickedElsewhere = assignments.entries.any((entry) => entry.key != rank && entry.value == p);
+                    bool isAlreadyPickedElsewhere = assignments.entries
+                        .any((entry) => entry.key != rank && entry.value == p);
                     
                     return DropdownMenuItem(
                       value: p,
@@ -295,21 +301,39 @@ void _showTableResultDialog(int tableId, List<String> tablePlayers) {
                   },
                 ),
               );
-            }).toList(),
+            }),
           ),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
           ElevatedButton(
-            // Only enable if all 4 ranks have a unique player assigned
+            // Enable only if every rank has a unique player assigned
             onPressed: assignments.values.any((v) => v == null) 
               ? null 
               : () async {
                   Navigator.pop(context);
+                  
                   for (var entry in assignments.entries) {
-                    double pts = (5 - entry.key).toDouble();
-                    await reportResult(entry.value!, pts, entry.key, tableId);
+                    int rank = entry.key;
+                    String playerName = entry.value!;
+                    double pts = 0;
+
+                    // --- CUSTOM SCORING LOGIC ---
+                    if (playerCount == 4) {
+                      // Standard: 1st=4, 2nd=3, 3rd=2, 4th=1
+                      pts = (5 - rank).toDouble(); 
+                    } else if (playerCount == 3) {
+                      // Your Rule: 1st=4, 2nd=2.5, 3rd=1
+                      if (rank == 1) pts = 4.0;
+                      else if (rank == 2) pts = 2.5;
+                      else if (rank == 3) pts = 1.0;
+                    }
+
+                    await reportResult(playerName, pts, rank, tableId);
                   }
+                  
+                  // Refresh the UI after all results are sent
+                  await refreshLobby();
                 },
             child: const Text("Save Table"),
           ),
@@ -464,49 +488,60 @@ void _showPendingSnackBar() {
 String _baseUrl(String endpoint) => "$serverUrl/api/$roomName/$endpoint";
 
 Future<void> refreshLobby() async {
-    if (roomName == null) return;
-    try {
-      // Notice how we use the roomName in the URL now
-      final pRes = await http.get(Uri.parse(_baseUrl('players')));
-      final sRes = await http.get(Uri.parse(_baseUrl('status')));
-      final hRes = await http.get(Uri.parse(_baseUrl('history')));
+  if (roomName == null) return;
+  try {
+    final pRes = await http.get(Uri.parse(_baseUrl('players')));
+    final sRes = await http.get(Uri.parse(_baseUrl('status')));
+    final hRes = await http.get(Uri.parse(_baseUrl('history')));
 
-      if (pRes.statusCode == 200 && sRes.statusCode == 200 && hRes.statusCode == 200) {
-        final statusData = jsonDecode(sRes.body);
-        setState(() {
-          players = jsonDecode(pRes.body);
-          history = jsonDecode(hRes.body);
-          isFinished = statusData['status'] == 'finished';
-          if (statusData['status'] == 'started') {
-            tableAssignments = statusData['assignments'];
-            currentRound = statusData['round'] ?? 0;
-          } else if (statusData['status'] == 'waiting') {
-            tableAssignments = [];
-            isFinished = false;
-          }
-        });
-      }
-    } catch (e) {
-      debugPrint("Sync Error: $e");
+    if (pRes.statusCode == 200 && sRes.statusCode == 200 && hRes.statusCode == 200) {
+      final statusData = jsonDecode(sRes.body);
+      final List fetchedPlayers = jsonDecode(pRes.body);
+      final List fetchedHistory = jsonDecode(hRes.body);
+      
+      setState(() {
+        players = fetchedPlayers;
+        history = fetchedHistory;
+        
+        // 1. Sync basic tournament state
+        if (statusData['status'] == 'started') {
+          tableAssignments = statusData['assignments'];
+          currentRound = statusData['round'] ?? 0;
+        } else if (statusData['status'] == 'waiting') {
+          tableAssignments = [];
+          currentRound = 0;
+        }
+
+        // 2. AUTO-FINISH LOGIC
+        // If the server says finished, OR if we reached maxRounds and all results are in
+        bool serverFinished = statusData['status'] == 'finished';
+        bool reachedMaxLimit = currentRound >= maxRounds && _allResultsIn();
+
+        if (serverFinished || reachedMaxLimit) {
+          isFinished = true;
+        } else {
+          isFinished = false;
+        }
+      });
     }
+  } catch (e) {
+    debugPrint("Sync Error: $e");
   }
+}
 
 Future<void> _finishTournament() async {
   try {
-    final response = await http.post(
-      Uri.parse(_baseUrl('finish-tournament')),
-      headers: {"Content-Type": "application/json"},
-      body: jsonEncode({'adminPassword': currentAdminPassword}),
-    );
-
-    if (response.statusCode == 200) {
-      setState(() {
-        isFinished = true;
-      });
-      _showSnackBar("Tournament Highly Successful! Checking final scores...", Colors.yellowAccent);
-    }
+    // We can call the status or a specific finish endpoint if you have one
+    // But most importantly, we set the local state to finished
+    setState(() {
+      isFinished = true;
+    });
+    
+    // Optional: Tell the server to save the final state
+    await refreshLobby(); 
+    _showSnackBar("Tournament Complete! 🏆", Colors.amber);
   } catch (e) {
-    _showSnackBar("Error finishing tournament", Colors.red);
+    _showSnackBar("Error finalizing tournament", Colors.red);
   }
 }
 
@@ -651,8 +686,14 @@ Future<void> reportResult(String pName, num points, int rank, int tableId) async
  }
 
 Future<void> startNextRound() async {
+
+  // If we are currently on the LAST round, we finish instead of starting a new one
+  if (currentRound >= maxRounds) {
+    await _finishTournament();
+    return;
+  }
   try {
-    // Note: The endpoint on your server is actually 'start'
+    
     final response = await http.post(
       Uri.parse(_baseUrl('start')), 
       headers: {"Content-Type": "application/json"},

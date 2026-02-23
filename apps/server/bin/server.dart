@@ -346,16 +346,18 @@ router.post('/api/<room>/start', (Request request, String room) async {
   // Algorithm to prioritize 4-player tables, falling back to 3-player tables
   while (activePlayers.length >= 3) {
     int size = 4;
-    // Special cases to ensure no one is left alone (e.g., 6 players = two 3-player tables)
-    if (activePlayers.length == 6 || activePlayers.length == 5 || activePlayers.length == 9) {
-      size = 3;
-    } else if (activePlayers.length < 4) {
+    // MATHEMATICAL BALANCE: 
+    // If the remainder of players is 3, or if we have exactly 5, 6, or 9 players,
+    // we must take 3 players now to ensure the rest can form tables of 3 or 4.
+    if (activePlayers.length % 4 != 0 && activePlayers.length % 4 < 3 || activePlayers.length == 6 || activePlayers.length == 5 || activePlayers.length == 3) {
       size = 3;
     }
 
     List tableNames = [];
     for (int i = 0; i < size; i++) {
-      tableNames.add(activePlayers.removeAt(0)['name']);
+      if (activePlayers.isNotEmpty) {
+        tableNames.add(activePlayers.removeAt(0)['name']);
+      }
     }
 
     newAssignments.add({
@@ -364,19 +366,16 @@ router.post('/api/<room>/start', (Request request, String room) async {
     });
   }
 
-  // 7. Handle "The Bye" (If 1 or 2 players are left)
+  // Handle any absolute leftovers (1 or 2 players) as Byes
   if (activePlayers.isNotEmpty) {
     for (var p in activePlayers) {
-      // Record the Bye in history immediately
       r['history'].add({
         'player': p['name'],
         'round': r['round'],
-        'points': 4.0, // Automatic win for a Bye
+        'points': 4.0, 
         'rank': 1,
-        'table': 0, // Table 0 = Bye
+        'table': 0, 
       });
-      
-      // Update the player's points in the main list
       var playerInMainList = players.firstWhere((element) => element['name'] == p['name']);
       playerInMainList['points'] = (playerInMainList['points'] as num) + 4.0;
     }
