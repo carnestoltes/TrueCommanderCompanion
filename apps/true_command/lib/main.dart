@@ -651,7 +651,6 @@ Future<void> reportResult(String pName, num points, int rank, int tableId) async
  }
 
 Future<void> startNextRound() async {
-  // If the current round is the one we set in the lobby, finish it!
   if (currentRound >= maxRounds) {
     _finishTournament();
     return;
@@ -663,16 +662,21 @@ Future<void> startNextRound() async {
       headers: {"Content-Type": "application/json"},
       body: jsonEncode({
         'adminPassword': currentAdminPassword,
-        // We can pass the maxRounds to the server here if your backend needs it
-        'totalRounds': maxRounds, 
+        'roomName': roomName, // CRITICAL: Server needs to know WHICH room
+        'maxRounds': maxRounds, // Send your lobby setting to the server
       }),
     );
 
     if (response.statusCode == 200) {
       await refreshLobby();
+      _showSnackBar("Round Started!", Colors.green);
+    } else {
+      // Decode the error from the server to see what's wrong
+      final errorData = jsonDecode(response.body);
+      _showSnackBar("Server Error: ${errorData['error']}", Colors.red);
     }
   } catch (e) {
-    _showSnackBar("Error moving to next round", Colors.red);
+    _showSnackBar("Connection Error. Check your internet.", Colors.red);
   }
 }
 
@@ -754,20 +758,17 @@ Future<void> removePlayerFromServer(String name) async {
     );
     
     if (response.statusCode == 200) {
-      // Option A: Force an immediate local UI update
+      // 1. Remove locally immediately
       setState(() {
         players.removeWhere((p) => p['name'] == name);
       });
-      
-      // Option B: Sync with server to ensure everything is perfect
+      // 2. Wait a split second for the server to update database
+      await Future.delayed(const Duration(milliseconds: 500));
+      // 3. Force a fresh sync
       await refreshLobby(); 
-      
-      _showSnackBar("Player $name removed", Colors.green);
-    } else {
-      _showSnackBar("Failed to remove player", Colors.red);
     }
   } catch (e) {
-    debugPrint("Remove Error: $e");
+    debugPrint("Delete error: $e");
   }
 }
 
