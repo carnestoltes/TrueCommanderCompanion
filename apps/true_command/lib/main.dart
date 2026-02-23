@@ -6,6 +6,7 @@ import 'dart:math';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:go_router/go_router.dart';
+import 'package:file_picker/file_picker.dart';
 
 void main() {
   runApp(MyApp());
@@ -130,53 +131,12 @@ void initState() {
         assignedPlayers.addAll(List<String>.from(table['players']));
       }
     }
-
     // 2. Check if every one of those players exists in the history for the current round
     return assignedPlayers.every((pName) => 
       history.any((log) => log['player'] == pName && log['round'] == currentRound)
     );
   }
-  // 1. Function to Change Server IP
-  // 1. Revised IP Dialog
-  /*void _showChangeIpDialog() {
-    TextEditingController ipController = TextEditingController(text: serverIp);
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("Update Server IP"),
-        content: TextField(
-          controller: ipController,
-          decoration: const InputDecoration(hintText: "e.g. 192.168.1.50"),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
-          ElevatedButton(
-            onPressed: () {
-              // STOP the timer immediately to prevent background sync
-              _refreshTimer?.cancel();
-
-              setState(() {
-                serverIp = ipController.text;
-                // FULL RESET: This forces the build method to show _buildRoleSelection()
-                hasSelectedRole = false; 
-                loggedInUser = null; 
-                isAdmin = false;
-                tableAssignments = []; 
-              });
-
-              Navigator.pop(context); // Close dialog
-
-              // Restart the timer for the "Front Page" if needed, 
-              // or let the next login start it.
-              _refreshTimer = Timer.periodic(const Duration(seconds: 3), (t) => refreshLobby());
-            },
-            child: const Text("Update & Logout"),
-          ),
-        ],
-      ),
-    );
-  }*/
-
+ 
   // 2. Revised Password Dialog
   void _showChangePasswordDialog() {
     TextEditingController passController = TextEditingController();
@@ -285,6 +245,17 @@ void _showJoinQR() {
     ),
   );
 }
+
+void massAddPlayers(String rawNames) {
+  List<String> names = rawNames.split(RegExp(r'[,\n]'))
+      .map((e) => e.trim())
+      .where((e) => e.isNotEmpty)
+      .toList();
+
+  for (var name in names) {
+    addPlayerToServer(name); // Your existing function
+  }
+}
   // --- API CALLS ---
 
 // Force the room name to lowercase so everyone ends up in the same room
@@ -342,6 +313,19 @@ Future<void> refreshLobby() async {
     });
     refreshLobby();
   }
+
+  Future<void> pickRosterFile() async {
+  FilePickerResult? result = await FilePicker.platform.pickFiles(
+    type: FileType.custom,
+    allowedExtensions: ['txt'],
+  );
+
+  if (result != null) {
+    // On web, bytes are used instead of a file path
+    String content = utf8.decode(result.files.first.bytes!);
+    massAddPlayers(content); 
+  }
+}
 
 Future<void> _scanJoinCode() async {
   final String? code = await Navigator.push(
@@ -517,6 +501,19 @@ Future<void> startNextRound() async {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text("Error: Could not reach server")),
     );
+  }
+}
+
+Future<void> addPlayerToServer(String name) async {
+  try {
+    await http.post(
+      Uri.parse(_baseUrl('join')),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'name': name}),
+    );
+    refreshLobby(); // Update the list immediately
+  } catch (e) {
+    debugPrint("Add Player Error: $e");
   }
 }
 
@@ -775,7 +772,45 @@ Widget _buildMainView() {
           ),
           const Divider(),
         ],
-
+        if (isAdmin && tableAssignments.isEmpty) ...[
+          Card(
+            margin: const EdgeInsets.all(16),
+            child: Padding(
+              padding: const EdgeInsets.all(12.0),
+              child: Column(
+                children: [
+                  const Text("Add Participants", style: TextStyle(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 10),
+                  TextField(
+                    maxLines: 3,
+                    decoration: const InputDecoration(
+                      hintText: "Paste names here (one per line)...",
+                      border: OutlineInputBorder(),
+                      fillColor: Colors.white,
+                      filled: true,
+                    ),
+                    onSubmitted: (value) {
+                      List<String> names = value.split('\n');
+                      for (var name in names) {
+                        if (name.trim().isNotEmpty) addPlayerToServer(name.trim());
+                      }
+                    },
+                  ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton.icon(
+                        onPressed: pickRosterFile,
+                        icon: const Icon(Icons.upload_file),
+                        label: const Text("Upload .txt"),
+                      ),
+                    ],
+                  )
+                ],
+              ),
+            ),
+          ),
+        ],
         const Padding(
           padding: EdgeInsets.symmetric(vertical: 10),
           child: Text("Tournament Standings", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
@@ -902,7 +937,6 @@ Widget _buildMainView() {
   );
 }
 
-  // (Keeping your original _buildPodiumView, _buildHistoryView, _getRankColor here)
 
   @override
   Widget build(BuildContext context) {
