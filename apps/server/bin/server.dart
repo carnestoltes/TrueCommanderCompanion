@@ -8,6 +8,8 @@ import 'package:shelf_static/shelf_static.dart';
 // ---------------- MULTI-ROOM STORAGE ----------------
 Map<String, Map<String, dynamic>> rooms = {};
 
+const String backupPath = 'tournament_backup.json';
+
 Map<String, dynamic> getRoom(String id) {
   return rooms.putIfAbsent(id, () => {
         'players': [],
@@ -18,6 +20,44 @@ Map<String, dynamic> getRoom(String id) {
         'isFinished': false,
         'pass': 'admin123',
       });
+}
+
+// SAVE: Call this every time a score is reported or a round starts
+void saveStateToFile(Map roomData) {
+  try {
+    final file = File(backupPath);
+    file.writeAsStringSync(jsonEncode(roomData));
+    print("Backup saved successfully.");
+  } catch (e) {
+    print("Error saving backup: $e");
+  }
+}
+
+// LOAD: Call this when the server first starts up
+Map<String, dynamic>? loadStateFromFile() {
+  try {
+    final file = File(backupPath);
+    if (file.existsSync()) {
+      final String content = file.readAsStringSync();
+      if (content.isEmpty) return null;
+      
+      // Decode as dynamic first, then cast
+      final dynamic decoded = jsonDecode(content);
+      return Map<String, dynamic>.from(decoded);
+    }
+  } catch (e) {
+    print("No backup found or error loading: $e");
+  }
+  return null;
+}
+
+// DELETE: Call this inside your "Finish Tournament" route
+void deleteBackup() {
+  final file = File(backupPath);
+  if (file.existsSync()) {
+    file.deleteSync();
+    print("Tournament finished: Backup deleted.");
+  }
 }
 
 // ---------------- CORS ----------------
@@ -41,6 +81,17 @@ Handler _addCorsHeaders(Handler handler) {
 void main() async {
   final router = Router();
 
+ var savedData = loadStateFromFile();
+  if (savedData != null) {
+    // Cast the generic Map to the specific types the compiler wants
+    Map<String, dynamic> recoveredRoom = Map<String, dynamic>.from(savedData);
+    
+    String roomId = recoveredRoom['id']?.toString() ?? 'default'; 
+    rooms[roomId] = recoveredRoom;
+    
+    print("Resilience Active: Recovered tournament $roomId");
+  }
+
   // ================= API ROUTES =================
   // Everything now under /api
 
@@ -63,14 +114,28 @@ void main() async {
   });
 
   router.post('/api/<room>/join', (Request request, String room) async {
-    final data = jsonDecode(await request.readAsString());
-    var r = getRoom(room);
-    List pList = r['players'];
-    if (!pList.any((p) => p['name'] == data['name'])) {
-      pList.add({'name': data['name'], 'points': 0.0, 'sos': 0.0});
-    }
-    return Response.ok(jsonEncode({'status': 'success'}));
-  });
+  var r = getRoom(room);
+  var data = jsonDecode(await request.readAsString());
+  String name = data['name'];
+
+  if (r['players'].length >= 64) {
+    return Response.badRequest(body: 'Tournament is full (64 max)!');
+  }
+
+  // Check if player already exists but was "dropped"
+  var existing = r['players'].firstWhere((p) => p['name'] == name, orElse: () => null);
+  if (existing != null) {
+    existing['isDropped'] = false; // "Un-drop" them if they rejoin
+  } else {
+    r['players'].add({
+      'name': name,
+      'points': 0.0,
+      'sos': 0.0,
+      'isDropped': false,
+    });
+  }
+  return Response.ok('Joined');
+});
 
   router.get('/api/<room>/players', (Request request, String room) {
     var r = getRoom(room);
@@ -104,6 +169,32 @@ void main() async {
     return Response.ok(jsonEncode(players));
   });
 
+ router.post('/api/<room>/restore', (Request request, String room) async {
+  final body = await request.readAsString();
+  final dynamic decodedData = jsonDecode(body);
+  
+  // Convert 'dynamic' to 'Map<String, dynamic>'
+  final Map<String, dynamic> data = Map<String, dynamic>.from(decodedData);
+  
+  rooms[room] = data; // Now the compiler is happy
+  saveStateToFile(data); 
+  
+  return Response.ok('Tournament Restored');
+});
+
+
+  router.post('/api/<room>/remove-player', (Request request, String room) async {
+    var r = getRoom(room);
+    var data = jsonDecode(await request.readAsString());
+    String name = data['name'];
+
+    var p = r['players'].firstWhere((p) => p['name'] == name, orElse: () => null);
+    if (p != null) {
+      p['isDropped'] = true; // Mark as dropped instead of deleting
+      return Response.ok('Player dropped');
+    }
+    return Response.badRequest(body: 'Player not found');
+  });
   router.get('/api/<room>/history',
       (Request request, String room) =>
           Response.ok(jsonEncode(getRoom(room)['history'])));
@@ -189,6 +280,8 @@ router.post('/api/<room>/report-result', (Request request, String room) async {
     'round': r['round'],
   });
   
+  // NEW: Save to JSON for resilience
+  saveStateToFile(r);
   return Response.ok(jsonEncode({'status': 'success'}));
 });
 
@@ -198,24 +291,23 @@ router.post('/api/<room>/start', (Request request, String room) async {
   List players = r['players'];
   List history = r['history'];
   List assignments = r['assignments'];
+  int currentRound = r['round'] ?? 0;
 
+  // 1. Basic Validation
   if (players.isEmpty) {
-    return Response.badRequest(body: 'No players!');
+    return Response.badRequest(body: jsonEncode({'error': 'No players in the room!'}));
   }
 
-  // --- NEW: SAFETY CHECK ---
-  // If we are currently in a round (round > 0), check if everyone reported
-  if (r['round'] > 0 && assignments.isNotEmpty) {
-    // Collect all player names that were assigned to tables this round
+  // 2. Safety Check: Ensure everyone from the PREVIOUS round reported
+  if (currentRound > 0 && assignments.isNotEmpty) {
     List<String> assignedNames = [];
     for (var table in assignments) {
       assignedNames.addAll(List<String>.from(table['players']));
     }
 
-    // Check if each assigned player has an entry in history for the current round
     for (var pName in assignedNames) {
       bool hasReported = history.any((entry) => 
-        entry['player'] == pName && entry['round'] == r['round']
+        entry['player'] == pName && entry['round'] == currentRound
       );
 
       if (!hasReported) {
@@ -226,42 +318,80 @@ router.post('/api/<room>/start', (Request request, String room) async {
       }
     }
   }
-  // --- END OF SAFETY CHECK ---
 
-  // Handle Tournament Finish
-  if (r['round'] >= r['maxRounds']) {
-    r['isFinished'] = true;
-    r['assignments'] = [];
-    return Response.ok(jsonEncode({'status': 'finished'}));
+  // 3. Prepare for New Round
+  r['round'] = currentRound + 1;
+  r['status'] = 'started';
+
+  // 4. Filter Active Players (Exclude Dropped)
+  // We take a shallow copy to avoid mutating the main list during sorting
+  List activePlayers = players.where((p) => p['isDropped'] != true).toList();
+
+  // 5. Swiss Sorting Logic
+  // Sort by Points (Primary) then SoS (Secondary)
+  activePlayers.sort((a, b) {
+    int cmp = (b['points'] as num).compareTo(a['points'] as num);
+    if (cmp == 0) {
+      num sosA = a['sos'] ?? 0;
+      num sosB = b['sos'] ?? 0;
+      return sosB.compareTo(sosA);
+    }
+    return cmp;
+  });
+
+  // 6. Create Tables (Swiss Pairing)
+  List newAssignments = [];
+  int tableCounter = 1;
+
+  // Algorithm to prioritize 4-player tables, falling back to 3-player tables
+  while (activePlayers.length >= 3) {
+    int size = 4;
+    // Special cases to ensure no one is left alone (e.g., 6 players = two 3-player tables)
+    if (activePlayers.length == 6 || activePlayers.length == 5 || activePlayers.length == 9) {
+      size = 3;
+    } else if (activePlayers.length < 4) {
+      size = 3;
+    }
+
+    List tableNames = [];
+    for (int i = 0; i < size; i++) {
+      tableNames.add(activePlayers.removeAt(0)['name']);
+    }
+
+    newAssignments.add({
+      'table': tableCounter++,
+      'players': tableNames,
+    });
   }
 
-  // Shuffle only for the very first round
-  if (r['round'] == 0) players.shuffle();
-
-  r['round']++;
-
-  // Sort by points for Swiss pairing
-  players.sort((a, b) => (b['points'] as num).compareTo(a['points'] as num));
-
-  List newAssignments = [];
-  int total = players.length;
-  int pPerTable = 4;
-
-  for (var i = 0; i < total; i += pPerTable) {
-    int end = (i + pPerTable < total) ? i + pPerTable : total;
-    newAssignments.add({
-      'table': (i ~/ pPerTable) + 1,
-      'players': players.sublist(i, end).map((p) => p['name'] as String).toList(),
-    });
+  // 7. Handle "The Bye" (If 1 or 2 players are left)
+  if (activePlayers.isNotEmpty) {
+    for (var p in activePlayers) {
+      // Record the Bye in history immediately
+      r['history'].add({
+        'player': p['name'],
+        'round': r['round'],
+        'points': 4.0, // Automatic win for a Bye
+        'rank': 1,
+        'table': 0, // Table 0 = Bye
+      });
+      
+      // Update the player's points in the main list
+      var playerInMainList = players.firstWhere((element) => element['name'] == p['name']);
+      playerInMainList['points'] = (playerInMainList['points'] as num) + 4.0;
+    }
   }
 
   r['assignments'] = newAssignments;
 
-  return Response.ok(jsonEncode({
-    'status': 'started',
-    'round': r['round'],
-    'assignments': newAssignments
-  }));
+  return Response.ok(
+    jsonEncode({
+      'status': r['status'],
+      'round': r['round'],
+      'assignments': r['assignments']
+    }),
+    headers: {'content-type': 'application/json'}
+  );
 });
 
  // ================= STATIC FLUTTER WEB =================
@@ -306,7 +436,8 @@ router.post('/api/<room>/start', (Request request, String room) async {
       .addHandler(spaFallback(cascade));
 
   final port = int.parse(Platform.environment['PORT'] ?? '8080');
+  final server = await io.serve(handler, InternetAddress.anyIPv4, port);
 
-  await io.serve(handler, '0.0.0.0', port);
+  //await io.serve(handler, '0.0.0.0', port);
   print('Server running on port $port');
 }

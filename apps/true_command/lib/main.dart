@@ -7,6 +7,8 @@ import 'package:qr_flutter/qr_flutter.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:go_router/go_router.dart';
 import 'package:file_picker/file_picker.dart';
+import 'dart:io';
+import 'package:flutter/foundation.dart'; // For kIsWeb
 
 void main() {
   runApp(MyApp());
@@ -80,6 +82,7 @@ String serverUrl = "https://truecommandercompanion.onrender.com";
   int currentRound = 0;
   int maxRounds = 3;
   int _currentIndex = 0;
+  String _searchQuery = "";
   bool isFinished = false;
   Timer? _refreshTimer;
 
@@ -247,14 +250,20 @@ void _showJoinQR() {
 }
 
 void massAddPlayers(String rawNames) {
-  List<String> names = rawNames.split(RegExp(r'[,\n]'))
-      .map((e) => e.trim())
-      .where((e) => e.isNotEmpty)
+  // Split by newline or comma, trim whitespace, and remove empty lines
+  List<String> newNames = rawNames
+      .split(RegExp(r'[\n,]'))
+      .map((name) => name.trim())
+      .where((name) => name.isNotEmpty)
       .toList();
 
-  for (var name in names) {
-    addPlayerToServer(name); // Your existing function
-  }
+  setState(() {
+    for (var name in newNames) {
+      if (players.length < 64 && !players.contains(name)) {
+        players.add(name);
+      }
+    }
+  });
 }
   // --- API CALLS ---
 
@@ -315,15 +324,57 @@ Future<void> refreshLobby() async {
   }
 
   Future<void> pickRosterFile() async {
-  FilePickerResult? result = await FilePicker.platform.pickFiles(
-    type: FileType.custom,
-    allowedExtensions: ['txt'],
-  );
+  try {
+    // 1. Open file picker (filter for .txt files)
+    FilePickerResult? result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['txt'],
+    );
 
-  if (result != null) {
-    // On web, bytes are used instead of a file path
-    String content = utf8.decode(result.files.first.bytes!);
-    massAddPlayers(content); 
+    if (result != null) {
+      String content = "";
+
+      if (kIsWeb) {
+        // Handle Web
+        final bytes = result.files.first.bytes;
+        if (bytes != null) content = String.fromCharCodes(bytes);
+      } else {
+        // Handle Android/iOS/Desktop
+        final file = File(result.files.single.path!);
+        content = await file.readAsString();
+      }
+
+      // 2. Split content into lines and filter
+      List<String> names = content
+          .split(RegExp(r'[\n\r]')) // Split by newline
+          .map((name) => name.trim()) // Remove whitespace
+          .where((name) => name.isNotEmpty) // Remove empty lines
+          .toList();
+
+      // 3. Safety check for your 64 player limit
+      if (players.length + names.length > 64) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Error: Total players would exceed 64!")),
+        );
+        return;
+      }
+
+      // 4. Batch add to server
+      int count = 0;
+      for (var name in names) {
+        await addPlayerToServer(name);
+        count++;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Successfully added $count players!"), backgroundColor: Colors.green),
+      );
+    }
+  } catch (e) {
+    debugPrint("File Pick Error: $e");
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("Failed to read file."), backgroundColor: Colors.red),
+    );
   }
 }
 
@@ -541,6 +592,43 @@ Future<void> addPlayerToServer(String name) async {
   }
 }
 
+Future<void> removePlayerFromServer(String name) async {
+  try {
+    final response = await http.post(
+      Uri.parse(_baseUrl('remove-player')), // You'll need this endpoint on your server
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({
+        'name': name,
+        'adminPassword': currentAdminPassword,
+      }),
+    );
+    if (response.statusCode == 200) {
+      refreshLobby();
+    }
+  } catch (e) {
+    debugPrint("Remove Error: $e");
+  }
+}
+
+void _confirmRemovePlayer(String name) {
+  showDialog(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text("Remove Player?"),
+      content: Text("Do you want to remove $name? They will not be paired in future rounds."),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
+        ElevatedButton(
+          onPressed: () {
+            removePlayerFromServer(name);
+            Navigator.pop(context);
+          },
+          child: const Text("Remove"),
+        ),
+      ],
+    ),
+  );
+}
   void _generateRandomRule() {
   setState(() {
     _selectedRule = _tieBreakRules[Random().nextInt(_tieBreakRules.length)];
@@ -716,14 +804,12 @@ Widget _buildMainView() {
 
   // 1. LOBBY VIEW (When no round is active)
   if (tableAssignments.isEmpty) {
-    // SORTING LOGIC: Points first, then SoS as tie-breaker
     List<dynamic> sortedPlayers = List.from(players);
     sortedPlayers.sort((a, b) {
       num pA = a['points'] ?? 0;
       num pB = b['points'] ?? 0;
-      int cmp = pB.compareTo(pA); // High points first
+      int cmp = pB.compareTo(pA);
       if (cmp == 0) {
-        // Tie-breaker: Higher SoS (Strength of Schedule) wins
         num sosA = a['sos'] ?? 0;
         num sosB = b['sos'] ?? 0;
         return sosB.compareTo(sosA);
@@ -731,209 +817,201 @@ Widget _buildMainView() {
       return cmp;
     });
 
-    return Column(
+    return ListView(
       children: [
         if (isAdmin) ...[
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Card(
-              child: ListTile(
-                leading: const Icon(Icons.repeat, color: Colors.blue),
-                title: TextField(
-                  controller: _roundsController,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: "Set Total Rounds"),
-                ),
+          // --- Round Settings ---
+          Card(
+            margin: const EdgeInsets.all(16.0),
+            child: ListTile(
+              leading: const Icon(Icons.repeat, color: Colors.blue),
+              title: TextField(
+                controller: _roundsController,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: "Set Total Rounds"),
               ),
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                /*TextButton.icon(
-                  onPressed: _showChangeIpDialog,
-                  icon: const Icon(Icons.edit_location_alt, size: 18),
-                  label: const Text("Change IP"),
-                ),*/
-                TextButton.icon(
-                    onPressed: _showJoinQR, // <--- Calls your show function
-                    icon: const Icon(Icons.qr_code, color: Colors.blue),
-                    label: const Text("Show QR", style: TextStyle(color: Colors.blue)),
-                  ),
-                TextButton.icon(
-                  onPressed: _showChangePasswordDialog,
-                  icon: const Icon(Icons.lock_open, color: Colors.orange),
-                  label: const Text("New Password", style: TextStyle(color: Colors.orange)),
-                ),
-              ],
-            ),
+          
+          // --- Admin Actions ---
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              TextButton.icon(
+                onPressed: _showJoinQR,
+                icon: const Icon(Icons.qr_code, color: Colors.blue),
+                label: const Text("Show QR"),
+              ),
+              TextButton.icon(
+                onPressed: _showChangePasswordDialog,
+                icon: const Icon(Icons.lock_open, color: Colors.orange),
+                label: const Text("New Password"),
+              ),
+            ],
           ),
           const Divider(),
-        ],
-        if (isAdmin && tableAssignments.isEmpty) ...[
-          Card(
-            margin: const EdgeInsets.all(16),
-            child: Padding(
-              padding: const EdgeInsets.all(12.0),
-              child: Column(
-                children: [
-                  const Text("Add Participants", style: TextStyle(fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 10),
-                  TextField(
-                    maxLines: 3,
-                    decoration: const InputDecoration(
-                      hintText: "Paste names here (one per line)...",
-                      border: OutlineInputBorder(),
-                      fillColor: Colors.white,
-                      filled: true,
-                    ),
-                    onSubmitted: (value) {
-                      List<String> names = value.split('\n');
-                      for (var name in names) {
-                        if (name.trim().isNotEmpty) addPlayerToServer(name.trim());
-                      }
-                    },
-                  ),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      TextButton.icon(
-                        onPressed: pickRosterFile,
-                        icon: const Icon(Icons.upload_file),
-                        label: const Text("Upload .txt"),
-                      ),
-                    ],
-                  )
-                ],
-              ),
-            ),
-          ),
-        ],
-        const Padding(
-          padding: EdgeInsets.symmetric(vertical: 10),
-          child: Text("Tournament Standings", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-        ),
 
-        Expanded(
-          child: ListView.builder(
-            itemCount: sortedPlayers.length,
-            itemBuilder: (context, i) {
-              final p = sortedPlayers[i];
-              bool isMe = p['name'] == loggedInUser;
-              return ListTile(
-                title: Text(p['name'], 
-                  style: TextStyle(fontWeight: isMe ? FontWeight.bold : FontWeight.normal)),
-                trailing: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.end,
+          // --- Manage Players Expansion ---
+          ExpansionTile(
+            leading: const Icon(Icons.people_outline),
+            title: Text("Manage Players (${players.length}/64)"),
+            children: [
+              // Search Bar
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: TextField(
+                  decoration: InputDecoration(
+                    hintText: "Search player name...",
+                    prefixIcon: const Icon(Icons.search, size: 20),
+                    isDense: true,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  onChanged: (value) => setState(() => _searchQuery = value),
+                ),
+              ),
+              // Add Player Row
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
                   children: [
-                    Text(
-                      "${p['points'].toString().replaceAll(RegExp(r'\.0$'), '')} pts", 
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)
+                    Expanded(
+                      child: TextField(
+                        controller: _nameController,
+                        decoration: const InputDecoration(hintText: "Add late player..."),
+                      ),
                     ),
-                    // REAL SOS DISPLAY
-                    Text(
-                      "SoS: ${p['sos'] ?? 0}", 
-                      style: TextStyle(fontSize: 11, color: Colors.blueGrey.shade600, fontStyle: FontStyle.italic)
+                    IconButton(
+                      icon: const Icon(Icons.person_add, color: Colors.green),
+                      onPressed: () {
+                        if (_nameController.text.isNotEmpty && players.length < 64) {
+                          addPlayerToServer(_nameController.text.trim());
+                          _nameController.clear();
+                          setState(() => _searchQuery = "");
+                        }
+                      },
                     ),
                   ],
                 ),
-              );
-            },
+              ),
+              const Divider(),
+              // Filtered List
+              ...players
+                  .where((p) => p['name']
+                      .toString()
+                      .toLowerCase()
+                      .contains(_searchQuery.toLowerCase()))
+                  .map((p) => ListTile(
+                        dense: true,
+                        title: Text(p['name']),
+                        trailing: IconButton(
+                          icon: const Icon(Icons.person_remove, color: Colors.red, size: 20),
+                          onPressed: () => _confirmRemovePlayer(p['name']),
+                        ),
+                      ))
+                  .toList(),
+            ],
+          ),
+        ],
+
+        const Padding(
+          padding: EdgeInsets.symmetric(vertical: 16),
+          child: Center(
+            child: Text("Tournament Standings", 
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
           ),
         ),
+
+        ...List.generate(sortedPlayers.length, (i) {
+          final p = sortedPlayers[i];
+          bool isMe = p['name'] == loggedInUser;
+          return ListTile(
+            leading: CircleAvatar(child: Text("${i + 1}")),
+            title: Text(p['name'], 
+              style: TextStyle(fontWeight: isMe ? FontWeight.bold : FontWeight.normal)),
+            trailing: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text("${p['points'].toString().replaceAll(RegExp(r'\.0$'), '')} pts", 
+                  style: const TextStyle(fontWeight: FontWeight.bold)),
+                Text("SoS: ${p['sos'] ?? 0}", style: const TextStyle(fontSize: 10, color: Colors.grey)),
+              ],
+            ),
+          );
+        }),
+        const SizedBox(height: 80),
       ],
     );
   }
 
-  // 2. ACTIVE TABLES VIEW (Same as your previous code)
-  return ListView.builder(
-    itemCount: tableAssignments.length,
-    itemBuilder: (context, i) {
-      var table = tableAssignments[i];
-      int tableNumber = table['table'];
-      int tableSize = table['players'].length;
-
-      return Card(
-        margin: const EdgeInsets.all(10),
-        child: Column(
-          children: [
-            ListTile(
-              title: Text("TABLE $tableNumber ($tableSize Players)", 
-                style: const TextStyle(fontWeight: FontWeight.bold)),
-              tileColor: Colors.blueGrey.shade100,
-              trailing: isAdmin ? IconButton(
-                icon: const Icon(Icons.casino, color: Colors.blueGrey),
-                onPressed: _generateRandomRule,
-                tooltip: "Roll Tie-Breaker",
-              ) : null,
-            ),
-            if (_selectedRule != null)
-              Container(
-                width: double.infinity,
-                color: Colors.red.shade50,
-                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-                child: Text(
-                  "TIE-BREAKER RULE: $_selectedRule",
-                  style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red.shade900),
-                  textAlign: TextAlign.center,
-                ),
-              ),
-            ...table['players'].map<Widget>((pName) {
-              bool isMe = pName == loggedInUser;
-              bool alreadyReported = history.any((log) => 
-                log['player'] == pName && log['round'] == currentRound
-              );
-
-              return ListTile(
-                title: Text(isMe ? "$pName" : pName, 
-                  style: TextStyle(
-                    fontWeight: isMe ? FontWeight.bold : FontWeight.normal,
-                    color: alreadyReported ? Colors.grey : Colors.black
-                  )),
-                trailing: isAdmin ? Wrap(
-                  spacing: 4,
-                  children: () {
-                    final Map<int, double> scoringMap = (tableSize == 3) 
-                        ? {1: 4.0, 2: 2.5, 3: 1.0} 
-                        : {1: 4.0, 2: 3.0, 3: 2.0, 4: 1.0};
-
-                    return scoringMap.entries.map((entry) {
-                      int rank = entry.key;
-                      double pts = entry.value;
-
-                      bool isRankTaken = history.any((log) => 
-                        log['table'] == tableNumber && 
-                        log['round'] == currentRound && 
-                        log['rank'] == rank
-                      );
-
-                      return ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          minimumSize: const Size(40, 38),
-                          padding: EdgeInsets.zero,
-                          backgroundColor: alreadyReported 
-                              ? Colors.grey 
-                              : (isRankTaken ? Colors.black38 : _getRankColor(rank)),
-                        ),
-                        onPressed: (alreadyReported || isRankTaken) 
-                            ? null 
-                            : () => reportResult(pName, pts, rank, tableNumber),
-                        child: isRankTaken 
-                            ? const Icon(Icons.lock, size: 12, color: Colors.white70) 
-                            : Text("$rankº", style: const TextStyle(color: Colors.white, fontSize: 11)),
-                      );
-                    }).toList();
-                  }(),
-                ) : (alreadyReported ? const Icon(Icons.check, color: Colors.green) : null),
-              );
-            }).toList(),
-          ],
+  // 2. ACTIVE TABLES VIEW
+  // We use a Column to show the Tie-Breaker rule at the top and the list below
+  return Column(
+    children: [
+      // --- THE TIE-BREAKER DISPLAY (Fixes "unused variable" warning) ---
+      if (_selectedRule != null)
+        Container(
+          width: double.infinity,
+          margin: const EdgeInsets.all(12),
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.red.shade50,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.red.shade200),
+          ),
+          child: Column(
+            children: [
+              const Text("ACTIVE TIE-BREAKER RULE", 
+                style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 12)),
+              const SizedBox(height: 4),
+              Text(_selectedRule!, 
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              if (isAdmin) 
+                TextButton(
+                  onPressed: () => setState(() => _selectedRule = null),
+                  child: const Text("Clear Rule", style: TextStyle(color: Colors.red)),
+                )
+            ],
+          ),
         ),
-      );
-    },
+
+      // --- THE TABLES LIST ---
+      Expanded(
+        child: ListView.builder(
+          itemCount: tableAssignments.length,
+          itemBuilder: (context, i) {
+            var table = tableAssignments[i];
+            int tableNumber = table['table'];
+            int tableSize = table['players'].length;
+
+            return Card(
+              margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              child: Column(
+                children: [
+                  ListTile(
+                    title: Text("TABLE $tableNumber ($tableSize Players)", 
+                      style: const TextStyle(fontWeight: FontWeight.bold)),
+                    tileColor: Colors.blueGrey.shade100,
+                    trailing: isAdmin ? IconButton(
+                      icon: const Icon(Icons.casino, color: Colors.blueGrey),
+                      onPressed: _generateRandomRule,
+                    ) : null,
+                  ),
+                  ...table['players'].map<Widget>((pName) {
+                    bool isMe = pName == loggedInUser;
+                    return ListTile(
+                      title: Text(pName, 
+                        style: TextStyle(fontWeight: isMe ? FontWeight.bold : FontWeight.normal)),
+                    );
+                  }).toList(),
+                ],
+              ),
+            );
+          },
+        ),
+      ),
+    ],
   );
 }
 
@@ -1050,7 +1128,6 @@ Widget _buildMainView() {
   ); 
   }
 }
-// --- PLACE THIS AT THE VERY END OF YOUR FILE ---
 
 class QRScannerPage extends StatelessWidget {
   const QRScannerPage({super.key});
