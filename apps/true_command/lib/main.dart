@@ -186,7 +186,8 @@ Future<Map<String, dynamic>> _runScryfallCheck(List<String> decklist) async {
           
           // Price logic
           String? price = card['prices']['eur'] ?? card['prices']['eur_foil'];
-          totalCost += double.tryParse(price ?? "0") ?? 0;
+          double cardPrice = double.tryParse(price ?? "0") ?? 0;
+          totalCost += (cardPrice * 1.10);
         }
       }
     } catch (e) { debugPrint("API Error: $e"); }
