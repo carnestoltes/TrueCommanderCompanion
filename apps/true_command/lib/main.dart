@@ -83,6 +83,7 @@ String serverUrl = "https://truecommandercompanion.onrender.com";
   int currentRound = 0;
   int _currentIndex = 0; 
   int maxRounds = 3; 
+  double tournamentBudgetLimit = 70.0; // Default limit in Euro
   bool isFinished = false;
   Timer? _refreshTimer;
   String _searchQuery = "";
@@ -97,6 +98,96 @@ final List<String> _tieBreakRules = [
   "Nº of Permanents [No lands/tokens]",
   "Nº of Mana Sources"
 ];
+
+Future<Map<String, dynamic>> checkCommanderDeck(List<String> decklist, double budget) async {
+  double totalCost = 0;
+  List<String> illegalCards = [];
+  List<String> foundCards = [];
+
+  // Scryfall limits query length, so we process in batches of 20
+  for (var i = 0; i < decklist.length; i += 20) {
+    var batch = decklist.sublist(i, i + 20 > decklist.length ? decklist.length : i + 20);
+    
+    // Create query: f:commander (name:"CardA" OR name:"CardB"...)
+    String namesQuery = batch.map((name) => '!"$name"').join(' OR ');
+    String finalQuery = Uri.encodeComponent('f:commander ($namesQuery)');
+    
+    final response = await http.get(
+      Uri.parse('https://api.scryfall.com/cards/search?q=$finalQuery&unique=cards&order=eur&dir=asc')
+    );
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      for (var card in data['data']) {
+        foundCards.add(card['name']);
+        String? price = card['prices']['eur'] ?? card['prices']['eur_foil'];
+        totalCost += double.tryParse(price ?? "0") ?? 0;
+      }
+    }
+    // Wait 100ms to respect Scryfall's rate limit
+    await Future.delayed(Duration(milliseconds: 100));
+  }
+
+  // Check which cards from the original list were NOT found (those are illegal)
+  for (var name in decklist) {
+    if (!foundCards.any((found) => found.toLowerCase() == name.toLowerCase())) {
+      illegalCards.add(name);
+    }
+  }
+
+  return {
+    'total': totalCost,
+    'isLegal': illegalCards.isEmpty && totalCost <= budget,
+    'illegalCards': illegalCards,
+  };
+}
+
+Future<Map<String, dynamic>> _runScryfallCheck(List<String> decklist) async {
+  double totalCost = 0;
+  List<String> illegalCards = [];
+  List<String> foundCards = [];
+
+  // Scryfall URI has a 1000 char limit, so batches of 15-20 are safest
+  for (var i = 0; i < decklist.length; i += 15) {
+    var batch = decklist.sublist(i, i + 15 > decklist.length ? decklist.length : i + 15);
+    
+    // Exact name match (!) joined by OR
+    String namesQuery = batch.map((name) => '!"$name"').join(' OR ');
+    
+    // Query: legal in commander AND (card A OR card B...) sorted by cheapest eur
+    String url = "https://api.scryfall.com/cards/search?q=${Uri.encodeComponent("f:commander ($namesQuery)")}&unique=cards&order=eur&dir=asc";
+
+    try {
+      final response = await http.get(Uri.parse(url), headers: {'User-Agent': 'TournamentApp/1.0'});
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        for (var card in data['data']) {
+          foundCards.add(card['name'].toString().toLowerCase());
+          // Fetch non-foil price first, fallback to foil
+          String? price = card['prices']['eur'] ?? card['prices']['eur_foil'];
+          totalCost += double.tryParse(price ?? "0") ?? 0;
+        }
+      }
+    } catch (e) {
+      print("Batch Error: $e");
+    }
+    await Future.delayed(const Duration(milliseconds: 100));
+  }
+
+  // Cross-reference original list to find the "Missing" (Illegal/Banned) cards
+  for (var name in decklist) {
+    if (!foundCards.contains(name.toLowerCase())) {
+      illegalCards.add(name);
+    }
+  }
+
+  return {
+    'total': totalCost,
+    'illegal': illegalCards,
+    'isOverBudget': totalCost > tournamentBudgetLimit,
+  };
+}
+
 
 @override
 void initState() {
@@ -144,6 +235,95 @@ void initState() {
   }
   return true; 
 }
+
+void _showDeckValidator() {
+  TextEditingController deckController = TextEditingController();
+  bool isChecking = false;
+
+  showDialog(
+    context: context,
+    builder: (context) => StatefulBuilder(
+      builder: (context, setDialogState) => AlertDialog(
+        title: const Text("Commander Deck Validator"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text("Paste the 100-card list below (e.g., 1x Sol Ring):",
+                style: TextStyle(fontSize: 12, color: Colors.grey)),
+            const SizedBox(height: 10),
+            TextField(
+              controller: deckController,
+              maxLines: 8,
+              decoration: InputDecoration(
+                hintText: "1x Sol Ring\n1x Command Tower...",
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+            ),
+            if (isChecking) ...[
+              const SizedBox(height: 20),
+              const LinearProgressIndicator(),
+              const Text("Checking prices & legality...", style: TextStyle(fontSize: 12)),
+            ]
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
+          ElevatedButton(
+            onPressed: isChecking ? null : () async {
+              setDialogState(() => isChecking = true);
+              
+              // Parse the raw text into a clean list of names
+              List<String> cleanList = deckController.text
+                  .split(RegExp(r'[\n\r]'))
+                  .map((line) => line.replaceAll(RegExp(r'^\d+x?\s+'), '').trim())
+                  .where((line) => line.isNotEmpty)
+                  .toList();
+
+              var result = await _runScryfallCheck(cleanList);
+              
+              setDialogState(() => isChecking = false);
+              Navigator.pop(context); // Close input
+              _showValidationResults(result); // Show results
+            },
+            child: const Text("Validate Deck"),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+void _showValidationResults(Map<String, dynamic> result) {
+  bool isBudgetOk = result['total'] <= 50.0; // Example budget of 50€
+  bool isLegal = result['illegal'].isEmpty;
+
+  showDialog(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: Text(isLegal && isBudgetOk ? "Deck Validated ✅" : "Validation Failed ❌"),
+      content: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text("Total Cost (Cheapest EUR): ${result['total'].toStringAsFixed(2)}€",
+                style: TextStyle(fontWeight: FontWeight.bold, color: isBudgetOk ? Colors.green : Colors.red)),
+            const Divider(),
+            if (!isLegal) ...[
+              const Text("Illegal or Unrecognized Cards:", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+              ...result['illegal'].map<Widget>((c) => Text("• $c")).toList(),
+              const SizedBox(height: 10),
+            ],
+            Text("Card Count Recognized: ${result['count']}/100"),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text("Close"))
+      ],
+    ),
+  );
+}
+
  
   // 2. Revised Password Dialog
   void _showChangePasswordDialog() {
@@ -1045,30 +1225,60 @@ Widget _buildRoleSelection() {
           // --- Round Settings ---
           if (currentRound == 0)
             Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Row(
-                children: [
-                  const Icon(Icons.timer, color: Colors.blueGrey),
-                  const SizedBox(width: 12),
-                  const Text("Total Rounds:", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                  const SizedBox(width: 20),
-                  SizedBox(
-                    width: 60,
-                    child: TextField(
-                      controller: _roundsController,
-                      keyboardType: TextInputType.number,
-                      textAlign: TextAlign.center,
-                      decoration: const InputDecoration(isDense: true),
-                      onChanged: (val) {
-                        setState(() {
-                          maxRounds = int.tryParse(val) ?? 3;
-                        });
-                      },
-                    ),
-                  ), 
-                ],
+    padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+    child: Column(
+      children: [
+        Row(
+          children: [
+            // --- ROUNDS SETTING ---
+            const Icon(Icons.timer, color: Colors.blueGrey),
+            const SizedBox(width: 12),
+            const Text("Rounds:", style: TextStyle(fontWeight: FontWeight.bold)),
+            const SizedBox(width: 10),
+            SizedBox(
+              width: 50,
+              child: TextField(
+                controller: _roundsController,
+                keyboardType: TextInputType.number,
+                textAlign: TextAlign.center,
+                decoration: const InputDecoration(isDense: true),
+                onChanged: (val) => setState(() => maxRounds = int.tryParse(val) ?? 3),
               ),
             ),
+            const SizedBox(width: 20),
+            
+            // --- BUDGET SETTING ---
+            const Icon(Icons.euro, color: Colors.green, size: 20),
+            const SizedBox(width: 8),
+            const Text("Budget:", style: TextStyle(fontWeight: FontWeight.bold)),
+            const SizedBox(width: 10),
+            SizedBox(
+              width: 60,
+              child: TextField(
+                keyboardType: TextInputType.number,
+                textAlign: TextAlign.center,
+                decoration: const InputDecoration(isDense: true, suffixText: "€"),
+                onChanged: (val) {
+                  setState(() {
+                    tournamentBudgetLimit = double.tryParse(val) ?? 70.0;
+                  });
+                },
+              ),
+            ),
+            const Spacer(),
+            
+            // --- VALIDATOR BUTTON ---
+            IconButton(
+              icon: const Icon(Icons.fact_check, color: Colors.blueAccent),
+              onPressed: _showDeckValidator,
+              tooltip: "Check Player Deck",
+            ),
+          ],
+        ),
+        const Divider(),
+      ],
+    ),
+  ),
 
           // --- Admin Actions ---
           Row(
@@ -1078,6 +1288,11 @@ Widget _buildRoleSelection() {
                 onPressed: _showJoinQR,
                 icon: const Icon(Icons.qr_code, color: Colors.blue),
                 label: const Text("Show QR"),
+              ),
+              ElevatedButton.icon(
+                onPressed: _showDeckValidator,
+                icon: const Icon(Icons.fact_check),
+                label: const Text("Check Deck Cost"),
               ),
               TextButton.icon(
                 onPressed: _showChangePasswordDialog,
