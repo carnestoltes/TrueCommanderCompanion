@@ -1065,17 +1065,7 @@ Widget _buildRoleSelection() {
                         });
                       },
                     ),
-                  ),
-                  const Spacer(),
-                  ElevatedButton.icon(
-                    onPressed: _confirmStartTournament, 
-                    icon: const Icon(Icons.play_arrow),
-                    label: const Text("Start"),
-                    style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green,
-                    foregroundColor: Colors.white,
-                  ),
-                  ),
+                  ), 
                 ],
               ),
             ),
@@ -1370,9 +1360,21 @@ Widget build(BuildContext context) {
     // 3. Floating Action Button: Changes behavior based on the Round
     floatingActionButton: (isAdmin && _currentIndex == 0 && !isFinished)
     ? FloatingActionButton(
-        onPressed: _allResultsIn() ? startNextRound : _showPendingSnackBar,
+        onPressed: () {
+          if (!_allResultsIn()) {
+            _showPendingSnackBar();
+            return;
+          }
+
+          // If we are in the lobby, show the "Advice" pop-up
+          if (currentRound == 0) {
+            _confirmStartTournament();
+          } else {
+            // If the round is already in progress, just start the next one normally
+            startNextRound();
+          }
+        },
         backgroundColor: _allResultsIn() ? Colors.redAccent : Colors.grey,
-        // Shows Trophy only when you reach the number defined in the lobby
         child: Icon(currentRound >= maxRounds ? Icons.emoji_events : Icons.play_arrow),
       )
     : null,
