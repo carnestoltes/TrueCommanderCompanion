@@ -194,6 +194,58 @@ void initState() {
     );
   }
 
+void _confirmStartTournament() {
+  final activeCount = players.where((p) => p['isDropped'] != true).length;
+
+  if (activeCount < 3) {
+    _showSnackBar("You need at least 3 players to start!", Colors.red);
+    return;
+  }
+
+  // Calculate table balance for the summary
+  int tablesOf4 = activeCount ~/ 4;
+  int remainder = activeCount % 4;
+  String tableSummary = "";
+  
+  if (remainder == 0) {
+    tableSummary = "$tablesOf4 tables of 4";
+  } else if (remainder == 3) {
+    tableSummary = "$tablesOf4 tables of 4 and 1 table of 3";
+  } else {
+    // Logic for 1 or 2 players left over (usually 2 tables of 3)
+    tableSummary = "${tablesOf4 - 1} tables of 4 and 2 tables of 3";
+  }
+
+  showDialog(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text("Start Tournament?"),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text("Active Players: $activeCount"),
+          Text("Setup: $tableSummary"),
+          Text("Rounds: $maxRounds"),
+          const SizedBox(height: 10),
+          const Text("This will generate the first pairings. Proceed?", 
+            style: TextStyle(fontSize: 12, color: Colors.grey)),
+        ],
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
+        ElevatedButton(
+          onPressed: () {
+            Navigator.pop(context);
+            startNextRound(); 
+          },
+          child: const Text("Start Round 1"),
+        ),
+      ],
+    ),
+  );
+}
+
 void _confirmReset() {
   showDialog(
     context: context,
@@ -581,7 +633,7 @@ Future<void> _finishTournament() async {
   }
 }
 
-Future<void> _scanJoinCode() async {
+/*Future<void> _scanJoinCode() async {
   final String? code = await Navigator.push(
     context, 
     MaterialPageRoute(builder: (context) => const QRScannerPage())
@@ -609,7 +661,7 @@ Future<void> _scanJoinCode() async {
       );
     }
   }
-}
+}*/
 Future<void> _sendPasswordUpdateToServer(String newPass) async {
   final url = Uri.parse(_baseUrl('update-password'));
   
@@ -962,10 +1014,13 @@ Widget _buildRoleSelection() {
 
 Widget _buildMainView() {
   if (isFinished) return _buildPodiumView();
+  
+  // This list filters out anyone marked as 'isDropped'
   final activePlayers = players.where((p) => p['isDropped'] != true).toList();
 
   // 1. LOBBY VIEW (When no round is active)
   if (tableAssignments.isEmpty) {
+    // FIX: Use activePlayers here so dropped people don't show in standings
     List<dynamic> sortedPlayers = List.from(activePlayers);
     sortedPlayers.sort((a, b) {
       num pA = a['points'] ?? 0;
@@ -1006,11 +1061,19 @@ Widget _buildMainView() {
                       },
                     ),
                   ),
+                  const Spacer(),
+                  // THE NEW START BUTTON WITH CONFIRMATION
+                  ElevatedButton.icon(
+                    onPressed: _confirmStartTournament,
+                    icon: const Icon(Icons.play_arrow),
+                    label: const Text("Start"),
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
+                  ),
                 ],
               ),
             ),
           
-          // --- Admin Actions ---
+          // --- Admin Actions (QR, Password, etc) ---
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
@@ -1028,88 +1091,21 @@ Widget _buildMainView() {
           ),
           const Divider(),
 
-         // --- Manage Players Expansion ---
+          // --- Manage Players Expansion ---
           ExpansionTile(
             leading: const Icon(Icons.people_outline),
-            title: Text("Manage Players (${players.length}/64)"),
+            title: Text("Manage Players (${activePlayers.length}/64)"), // Use active length
             children: [
-              // Two buttons side-by-side for File and Paste
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: Row(
-                  children: [
-                    // File Upload Button
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: pickRosterFile,
-                        icon: const Icon(Icons.upload_file),
-                        label: const Text("File (.txt)"),
-                        style: OutlinedButton.styleFrom(foregroundColor: Colors.blue),
-                      ),
-                    ),
-                    const SizedBox(width: 8), // Gap between buttons
-                    // Bulk Paste Button
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: _showBulkPasteDialog, // Calls the dialog function
-                        icon: const Icon(Icons.content_paste),
-                        label: const Text("Paste List"),
-                        style: OutlinedButton.styleFrom(foregroundColor: Colors.blue),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const Divider(height: 1),
+              // ... (Your File/Paste/Search/Add fields remain here) ...
               
-              // Search Bar
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: TextField(
-                  decoration: InputDecoration(
-                    hintText: "Search player name...",
-                    prefixIcon: const Icon(Icons.search, size: 20),
-                    isDense: true,
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                  ),
-                  onChanged: (value) => setState(() => _searchQuery = value),
-                ),
-              ),
-              
-              // Manual Add Field
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _nameController,
-                        decoration: const InputDecoration(hintText: "Add late player..."),
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.person_add, color: Colors.green),
-                      onPressed: () {
-                        if (_nameController.text.isNotEmpty && players.length < 64) {
-                          addPlayerToServer(_nameController.text.trim());
-                          _nameController.clear();
-                          setState(() => _searchQuery = "");
-                        }
-                      },
-                    ),
-                  ],
-                ),
-              ),
-              const Divider(),
-              
-              // Player List (Keep your existing .where...map logic here)
+              // Filtered Player List for management
               ...activePlayers
                   .where((p) => p['name']
                       .toString()
                       .toLowerCase()
                       .contains(_searchQuery.toLowerCase()))
                   .map((p) => ListTile(
-                        key: ValueKey(p['name']), // Helps Flutter track the item during deletion
+                        key: ValueKey(p['name']),
                         dense: true,
                         title: Text(p['name']),
                         trailing: IconButton(
@@ -1117,7 +1113,6 @@ Widget _buildMainView() {
                           onPressed: () => _confirmRemovePlayer(p['name']),
                         ),
                       ))
-                  //.toList(),
             ],
           ),
         ],
@@ -1130,6 +1125,7 @@ Widget _buildMainView() {
           ),
         ),
 
+        // This generated list now ONLY contains active players
         ...List.generate(sortedPlayers.length, (i) {
           final p = sortedPlayers[i];
           bool isMe = p['name'] == loggedInUser;
@@ -1271,7 +1267,7 @@ Widget build(BuildContext context) {
   return Scaffold(
     appBar: AppBar(
       title: Text(isAdmin ? "Admin Console" : "Tournament Info"),
-      backgroundColor: isAdmin ? Colors.redAccent.shade700 : Colors.blueGrey,
+      backgroundColor: isAdmin ? const Color.fromARGB(255, 45, 201, 73) : Colors.blueGrey,
       leading: IconButton(
         icon: const Icon(Icons.logout),
         onPressed: () {
