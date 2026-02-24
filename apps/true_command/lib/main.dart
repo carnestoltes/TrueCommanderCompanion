@@ -144,33 +144,34 @@ Future<Map<String, dynamic>> checkCommanderDeck(List<String> decklist, double bu
 
 Future<Map<String, dynamic>> _runScryfallCheck(List<String> decklist) async {
   double totalCost = 0;
-  List<String> foundCards = [];
+  List<String> confirmedNames = []; // Names returned by API
   List<String> illegalCards = [];
+  int recognizedCount = 0; // Total count of lines validated
   
-  // Expanded list to include Snow-Covered basics
   const basicLands = {
     'swamp', 'forest', 'plains', 'island', 'mountain',
     'snow-covered swamp', 'snow-covered forest', 'snow-covered plains', 
-    'snow-covered island', 'snow-covered mountain'
+    'snow-covered island', 'snow-covered mountain', 'wastes'
   };
 
   List<String> nonBasics = [];
 
-  // 1. Filter out Basics immediately
+  // 1. First Pass: Handle Basics and setup validation
   for (var name in decklist) {
     String cleanName = name.toLowerCase().trim();
     if (basicLands.contains(cleanName)) {
-      foundCards.add(cleanName); // Basics are free and legal
+      recognizedCount++; // Basic lands always count as recognized
     } else {
       nonBasics.add(name);
     }
   }
 
-  // 2. Process Non-Basics (Same as before)
+  // 2. Second Pass: Batch API calls for Non-Basics
   for (var i = 0; i < nonBasics.length; i += 15) {
     var batch = nonBasics.sublist(i, i + 15 > nonBasics.length ? nonBasics.length : i + 15);
-    String namesQuery = batch.map((name) => '!"$name"').join(' OR ');
     
+    // We use "exact" matches for the API
+    String namesQuery = batch.map((name) => '!"$name"').join(' OR ');
     String url = "https://api.scryfall.com/cards/search?q=" + 
                  Uri.encodeComponent("f:commander ($namesQuery)") + 
                  "&unique=cards&order=eur&dir=asc";
@@ -180,20 +181,30 @@ Future<Map<String, dynamic>> _runScryfallCheck(List<String> decklist) async {
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         for (var card in data['data']) {
-          foundCards.add(card['name'].toString().toLowerCase());
+          // Store the names Scryfall confirmed exist
+          confirmedNames.add(card['name'].toString().toLowerCase());
+          
+          // Price logic
           String? price = card['prices']['eur'] ?? card['prices']['eur_foil'];
           totalCost += double.tryParse(price ?? "0") ?? 0;
         }
       }
-    } catch (e) {
-      debugPrint("API Error: $e");
-    }
+    } catch (e) { debugPrint("API Error: $e"); }
     await Future.delayed(const Duration(milliseconds: 100));
   }
 
-  // 3. Final Comparison
+  // 3. Third Pass: Compare original nonBasics against confirmedNames
   for (var name in nonBasics) {
-    if (!foundCards.contains(name.toLowerCase().trim())) {
+    String searchName = name.toLowerCase().trim();
+    
+    // Check if the card name (or part of it for DFCs) was confirmed
+    bool found = confirmedNames.any((confirmed) => 
+      confirmed == searchName || confirmed.contains(searchName)
+    );
+
+    if (found) {
+      recognizedCount++;
+    } else {
       illegalCards.add(name);
     }
   }
@@ -201,7 +212,7 @@ Future<Map<String, dynamic>> _runScryfallCheck(List<String> decklist) async {
   return {
     'total': totalCost,
     'illegal': illegalCards,
-    'count': foundCards.length 
+    'count': recognizedCount // This should now correctly reach 100
   };
 }
 
