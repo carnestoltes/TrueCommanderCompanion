@@ -1302,16 +1302,8 @@ Widget _buildRoleSelection() {
               ),
             ),
             const Spacer(),
-            
-            // --- VALIDATOR BUTTON ---
-            IconButton(
-              icon: const Icon(Icons.fact_check, color: Colors.blueAccent),
-              onPressed: _showDeckValidator,
-              tooltip: "Check Player Deck",
-            ),
           ],
         ),
-        const Divider(),
       ],
     ),
   ),
