@@ -144,39 +144,56 @@ Future<Map<String, dynamic>> checkCommanderDeck(List<String> decklist, double bu
 
 Future<Map<String, dynamic>> _runScryfallCheck(List<String> decklist) async {
   double totalCost = 0;
-  List<String> illegalCards = [];
   List<String> foundCards = [];
+  List<String> illegalCards = [];
+  
+  // Expanded list to include Snow-Covered basics
+  const basicLands = {
+    'swamp', 'forest', 'plains', 'island', 'mountain',
+    'snow-covered swamp', 'snow-covered forest', 'snow-covered plains', 
+    'snow-covered island', 'snow-covered mountain'
+  };
 
-  // Scryfall URI has a 1000 char limit, so batches of 15-20 are safest
-  for (var i = 0; i < decklist.length; i += 15) {
-    var batch = decklist.sublist(i, i + 15 > decklist.length ? decklist.length : i + 15);
-    
-    // Exact name match (!) joined by OR
+  List<String> nonBasics = [];
+
+  // 1. Filter out Basics immediately
+  for (var name in decklist) {
+    String cleanName = name.toLowerCase().trim();
+    if (basicLands.contains(cleanName)) {
+      foundCards.add(cleanName); // Basics are free and legal
+    } else {
+      nonBasics.add(name);
+    }
+  }
+
+  // 2. Process Non-Basics (Same as before)
+  for (var i = 0; i < nonBasics.length; i += 15) {
+    var batch = nonBasics.sublist(i, i + 15 > nonBasics.length ? nonBasics.length : i + 15);
     String namesQuery = batch.map((name) => '!"$name"').join(' OR ');
     
-    // Query: legal in commander AND (card A OR card B...) sorted by cheapest eur
-    String url = "https://api.scryfall.com/cards/search?q=${Uri.encodeComponent("f:commander ($namesQuery)")}&unique=cards&order=eur&dir=asc";
+    String url = "https://api.scryfall.com/cards/search?q=" + 
+                 Uri.encodeComponent("f:commander ($namesQuery)") + 
+                 "&unique=cards&order=eur&dir=asc";
 
     try {
-      final response = await http.get(Uri.parse(url), headers: {'User-Agent': 'TournamentApp/1.0'});
+      final response = await http.get(Uri.parse(url));
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         for (var card in data['data']) {
           foundCards.add(card['name'].toString().toLowerCase());
-          // Fetch non-foil price first, fallback to foil
           String? price = card['prices']['eur'] ?? card['prices']['eur_foil'];
           totalCost += double.tryParse(price ?? "0") ?? 0;
         }
       }
     } catch (e) {
-      print("Batch Error: $e");
+      debugPrint("API Error: $e");
     }
     await Future.delayed(const Duration(milliseconds: 100));
   }
 
-  // Cross-reference original list to find the "Missing" (Illegal/Banned) cards
-  for (var name in decklist) {
-    if (!foundCards.contains(name.toLowerCase())) {
+  // 3. Final Comparison
+  for (var name in nonBasics) {
+    if (!foundCards.contains(name.toLowerCase().trim())) {
       illegalCards.add(name);
     }
   }
@@ -184,7 +201,7 @@ Future<Map<String, dynamic>> _runScryfallCheck(List<String> decklist) async {
   return {
     'total': totalCost,
     'illegal': illegalCards,
-    'isOverBudget': totalCost > tournamentBudgetLimit,
+    'count': foundCards.length 
   };
 }
 
@@ -294,7 +311,7 @@ void _showDeckValidator() {
 }
 
 void _showValidationResults(Map<String, dynamic> result) {
-  bool isBudgetOk = result['total'] <= 50.0; // Example budget of 50€
+  bool isBudgetOk = result['total'] <= 70.0; // Example budget of 70€
   bool isLegal = result['illegal'].isEmpty;
 
   showDialog(
@@ -313,7 +330,14 @@ void _showValidationResults(Map<String, dynamic> result) {
               ...result['illegal'].map<Widget>((c) => Text("• $c")).toList(),
               const SizedBox(height: 10),
             ],
-            Text("Card Count Recognized: ${result['count']}/100"),
+            Text("Card Count Recognized: ${result['count'] ?? 0}/100"),
+            
+            Text("Summary:"),
+            Text("• Total Price: ${result['total'].toStringAsFixed(2)}€"),
+            Text("• Cards Recognized: ${result['count']}/100"),
+            if (result['illegal'].isNotEmpty) 
+              Text("• Issues: ${result['illegal'].length} cards failed check.", 
+                  style: TextStyle(color: Colors.red)),
           ],
         ),
       ),
