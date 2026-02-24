@@ -324,7 +324,7 @@ void _showDeckValidator() {
 }
 
 void _showValidationResults(Map<String, dynamic> result) {
-  bool isBudgetOk = result['total'] <= 70.0; // Example budget of 70€
+  bool isBudgetOk = result['total'] <= tournamentBudgetLimit; // Example budget of 70€
   bool isLegal = result['illegal'].isEmpty;
 
   showDialog(
