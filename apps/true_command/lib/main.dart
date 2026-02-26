@@ -973,28 +973,36 @@ Future<void> _sendPasswordUpdateToServer(String newPass) async {
 
 Future<void> reportResult(String pName, num points, int rank, int tableId) async {
   try {
+    // Determine the result label for the SnackBar
+    String resultLabel = (selectedMode == TournamentMode.dual) 
+        ? (rank == 1 ? "Win" : "Loss") 
+        : "Rank $rank";
+
     final response = await http.post(
       Uri.parse(_baseUrl('report-result')),
       headers: {"Content-Type": "application/json"},
       body: jsonEncode({
         'name': pName,
-        'points': points,
-        'rank': rank, // Use the rank passed from the button
+        'rank': rank, // 1 for winner, 2 for loser
         'table': tableId,
         'adminKey': currentAdminPassword,
+        'points': points, 
       }),
     );
 
     if (response.statusCode == 200) {
-      await refreshLobby(); // Force update the UI
+      await refreshLobby(); 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Recorded: $pName got $points pts")),
+        SnackBar(
+          content: Text("Recorded $pName: $resultLabel"),
+          backgroundColor: rank == 1 ? Colors.green : Colors.blueGrey,
+        ),
       );
     }
   } catch (e) {
     debugPrint("Report Error: $e");
   }
- }
+}
 
 Future<void> startNextRound() async {
   if (currentRound >= maxRounds) {

@@ -263,46 +263,48 @@ router.post('/api/<room>/report-result', (Request request, String room) async {
   final data = jsonDecode(await request.readAsString());
   var r = getRoom(room);
   
-  // 1. Get current mode (default to multiplayer if not set)
+// 1. Get the player and the rank they reported
+  var player = r['players'].firstWhere((p) => p['name'] == data['name']);
+  int rank = data['rank'] ?? 2; // Default to 2 (Loss) if not provided
+  
+  // 2. Identify the Mode (we saved this in the /start route)
   String mode = r['mode'] ?? 'multiplayer';
   
-  // 2. Determine points based on Rank and Mode
-  int rank = data['rank'] as int;
-  double pointsToAssign = 0;
+  // 3. Logic to assign points based on Mode
+  double pointsAwarded = 0.0;
 
   if (mode == 'dual') {
     // --- DUAL COMMANDER (1v1) ---
     if (rank == 1) {
-      pointsToAssign = 3.0; // Win
+      pointsAwarded = 3.0; // Win
     } else if (rank == 0) {
-      pointsToAssign = 1.0; // Draw (Optional)
+      pointsAwarded = 1.0; // Draw (Optional)
     } else {
-      pointsToAssign = 0.0; // Loss
+      pointsAwarded = 0.0; // Loss
     }
   } else {
     // --- MULTIPLAYER (Pods) ---
     // Standard logic: 1st=4, 2nd=3, 3rd=2, 4th=1 (or your custom points)
-    if (rank == 1) {pointsToAssign = 4.0;}
-    else if (rank == 2) {pointsToAssign = 3.0;}
-    else if (rank == 3) {pointsToAssign = 2.0;}
-    else {pointsToAssign = 1.0;}
+    if (rank == 1) {pointsAwarded = 4.0;}
+    else if (rank == 2) {pointsAwarded = 3.0;}
+    else if (rank == 3) {pointsAwarded = 2.0;}
+    else {pointsAwarded = 1.0;}
   }
 
   // 3. Update the player's total points
-  var player = r['players'].firstWhere((p) => p['name'] == data['name']);
-  player['points'] = (player['points'] as num) + pointsToAssign;
+  player['points'] = (player['points'] as num) + pointsAwarded;
   
-  // 4. Add to history log (Use pointsToAssign for security)
+  // 4. Add to history log (Use pointsAwarded for security)
   r['history'].add({
     'player': data['name'],
-    'points': pointsToAssign, 
+    'points': pointsAwarded, 
     'rank': rank,
     'table': data['table'],
     'round': r['round'],
   });
   
   saveStateToFile(r);
-  return Response.ok(jsonEncode({'status': 'success', 'awarded': pointsToAssign}));
+  return Response.ok(jsonEncode({'status': 'success', 'awarded': pointsAwarded}));
 });
 
   // ---------------- START ROUND ----------------
