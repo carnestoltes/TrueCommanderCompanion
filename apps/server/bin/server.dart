@@ -289,6 +289,9 @@ router.post('/api/<room>/start', (Request request, String room) async {
   List assignments = r['assignments'];
   int currentRound = r['round'] ?? 0;
 
+  final body = jsonDecode(await request.readAsString());
+  final String selectedMode = body['mode'] ?? 'multiplayer';
+
   // 1. Basic Validation
   if (players.isEmpty) {
     return Response.badRequest(body: jsonEncode({'error': 'No players in the room!'}));
@@ -339,21 +342,29 @@ router.post('/api/<room>/start', (Request request, String room) async {
   List newAssignments = [];
   int tableCounter = 1;
 
-  // Algorithm to prioritize 4-player tables, falling back to 3-player tables
+  if (selectedMode == 'dual') {
+  // --- 1v1 SWISS PAIRING ---
+  while (activePlayers.length >= 2) {
+    var p1 = activePlayers.removeAt(0);
+    var p2 = activePlayers.removeAt(0);
+    newAssignments.add({
+      'table': tableCounter++,
+      'players': [p1['name'], p2['name']],
+    });
+  }
+} else {
+  // --- MULTIPLAYER PODS (3-4 Players) ---
   while (activePlayers.length >= 3) {
     int size = 4;
-    // MATHEMATICAL BALANCE: 
-    // If the remainder of players is 3, or if we have exactly 5, 6, or 9 players,
-    // we must take 3 players now to ensure the rest can form tables of 3 or 4.
-    if (activePlayers.length % 4 != 0 && activePlayers.length % 4 < 3 || activePlayers.length == 6 || activePlayers.length == 5 || activePlayers.length == 3) {
+    // Your Balanced Logic: force 3 if remainder is awkward or count is 3, 5, 6
+    if (activePlayers.length % 4 != 0 && activePlayers.length % 4 < 3 || 
+        [3, 5, 6].contains(activePlayers.length)) {
       size = 3;
     }
 
     List tableNames = [];
-    for (int i = 0; i < size; i++) {
-      if (activePlayers.isNotEmpty) {
-        tableNames.add(activePlayers.removeAt(0)['name']);
-      }
+    for (int i = 0; i < size && activePlayers.isNotEmpty; i++) {
+      tableNames.add(activePlayers.removeAt(0)['name']);
     }
 
     newAssignments.add({
@@ -361,21 +372,26 @@ router.post('/api/<room>/start', (Request request, String room) async {
       'players': tableNames,
     });
   }
+}
 
-  // Handle any absolute leftovers (1 or 2 players) as Byes
-  if (activePlayers.isNotEmpty) {
-    for (var p in activePlayers) {
-      r['history'].add({
-        'player': p['name'],
-        'round': r['round'],
-        'points': 4.0, 
-        'rank': 1,
-        'table': 0, 
-      });
-      var playerInMainList = players.firstWhere((element) => element['name'] == p['name']);
-      playerInMainList['points'] = (playerInMainList['points'] as num) + 4.0;
-    }
+// 7. Handle Leftovers (Byes)
+if (activePlayers.isNotEmpty) {
+  for (var p in activePlayers) {
+    // Points for a BYE: 3.0 for Dual, 4.0 for Multi (depending on your rules)
+    double byePoints = (selectedMode == 'dual') ? 3.0 : 4.0;
+    
+    r['history'].add({
+      'player': p['name'],
+      'round': r['round'],
+      'points': byePoints, 
+      'rank': 1,
+      'table': 0, // 0 represents a BYE
+    });
+    
+    var playerInMainList = players.firstWhere((el) => el['name'] == p['name']);
+    playerInMainList['points'] = (playerInMainList['points'] as num) + byePoints;
   }
+}
 
   r['assignments'] = newAssignments;
 

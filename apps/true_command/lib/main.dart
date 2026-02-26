@@ -10,6 +10,9 @@ import 'package:file_picker/file_picker.dart';
 import 'dart:io';
 import 'package:flutter/foundation.dart'; // For kIsWeb
 
+enum TournamentMode { dual, multiplayer }
+TournamentMode selectedMode = TournamentMode.multiplayer; // Default
+
 void main() {
   runApp(MyApp());
 }
@@ -64,7 +67,7 @@ class TournamentApp extends StatefulWidget {
 
 class _TournamentAppState extends State<TournamentApp> {
   // --- CONFIGURATION ---
-String serverUrl = "https://truecommandercompanion.onrender.com"; 
+  String serverUrl = "https://truecommandercompanion.onrender.com"; 
   
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _roomController = TextEditingController(); 
@@ -88,6 +91,7 @@ String serverUrl = "https://truecommandercompanion.onrender.com";
   Timer? _refreshTimer;
   String _searchQuery = "";
   String? _selectedRule;
+  
 
   // --- TIE BREAK LOGIC ---
 final List<String> _tieBreakRules = [
@@ -144,9 +148,9 @@ Future<Map<String, dynamic>> checkCommanderDeck(List<String> decklist, double bu
 
 Future<Map<String, dynamic>> _runScryfallCheck(List<String> decklist) async {
   double totalCost = 0;
-  List<String> confirmedNames = []; // Names returned by API
+  int totalInList = 0;
   List<String> illegalCards = [];
-  int recognizedCount = 0; // Total count of lines validated
+  Map<String, int> nonBasics = {};
   
   const basicLands = {
     'swamp', 'forest', 'plains', 'island', 'mountain',
@@ -154,67 +158,72 @@ Future<Map<String, dynamic>> _runScryfallCheck(List<String> decklist) async {
     'snow-covered island', 'snow-covered mountain', 'wastes'
   };
 
-  List<String> nonBasics = [];
-
-  // 1. First Pass: Handle Basics and setup validation
-  for (var name in decklist) {
-    String cleanName = name.toLowerCase().trim();
-    if (basicLands.contains(cleanName)) {
-      recognizedCount++; // Basic lands always count as recognized
-    } else {
-      nonBasics.add(name);
+  // 1. SYNC PASS: Count everything and filter basics
+  for (var line in decklist) {
+    final match = RegExp(r'^(\d+)x?\s+(.*)$').firstMatch(line.trim());
+    int qty = match != null ? int.parse(match.group(1)!) : 1;
+    String name = (match != null ? match.group(2)! : line).trim();
+    
+    if (name.isEmpty) continue;
+    
+    totalInList += qty; // Start building toward 100 immediately
+    
+    if (!basicLands.contains(name.toLowerCase())) {
+      nonBasics[name] = (nonBasics[name] ?? 0) + qty;
     }
   }
 
-  // 2. Second Pass: Batch API calls for Non-Basics
-  for (var i = 0; i < nonBasics.length; i += 15) {
-    var batch = nonBasics.sublist(i, i + 15 > nonBasics.length ? nonBasics.length : i + 15);
-    
-    // We use "exact" matches for the API
-    String namesQuery = batch.map((name) => '!"$name"').join(' OR ');
-    String url = "https://api.scryfall.com/cards/search?q=" + 
-                 Uri.encodeComponent("f:commander ($namesQuery)") + 
-                 "&unique=cards&order=eur&dir=asc";
+  // 2. ASYNC PASS: Fetch prices for non-basics
+  List<String> queryNames = nonBasics.keys.toList();
+  List<String> confirmedNames = [];
+
+  for (var i = 0; i < queryNames.length; i += 15) {
+    var batch = queryNames.sublist(i, i + 15 > queryNames.length ? queryNames.length : i + 15);
+    String query = batch.map((n) => '!"$n"').join(' OR ');
+    String url = "https://api.scryfall.com/cards/search?q=${Uri.encodeComponent("f:commander ($query)")}&unique=cards&order=eur";
 
     try {
       final response = await http.get(Uri.parse(url));
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         for (var card in data['data']) {
-          // Store the names Scryfall confirmed exist
-          confirmedNames.add(card['name'].toString().toLowerCase());
-          
-          // Price logic
-          String? price = card['prices']['eur'] ?? card['prices']['eur_foil'];
-           totalCost += double.tryParse(price ?? "0") ?? 0;
-          /*double cardPrice = double.tryParse(price ?? "0") ?? 0;
-          totalCost += (cardPrice * 1.05);*/ // Add 5% margin for price fluctuations
+          String sName = card['name'].toString().toLowerCase();
+          confirmedNames.add(sName);
+
+          // Price + 10% Buffer
+          String? pStr = card['prices']['eur'] ?? card['prices']['eur_foil'];
+          double price = (double.tryParse(pStr ?? "0") ?? 0) * 1.10;
+
+          // Find qty from our map
+          String originalKey = nonBasics.keys.firstWhere(
+            (k) => sName == k.toLowerCase() || sName.contains(k.toLowerCase()),
+            orElse: () => ""
+          );
+          if (originalKey.isNotEmpty) {
+            totalCost += (price * nonBasics[originalKey]!);
+          }
         }
       }
-    } catch (e) { debugPrint("API Error: $e"); }
+    } catch (e) { debugPrint("Scryfall Error: $e"); }
     await Future.delayed(const Duration(milliseconds: 100));
   }
 
-  // 3. Third Pass: Compare original nonBasics against confirmedNames
-  for (var name in nonBasics) {
-    String searchName = name.toLowerCase().trim();
-    
-    // Check if the card name (or part of it for DFCs) was confirmed
-    bool found = confirmedNames.any((confirmed) => 
-      confirmed == searchName || confirmed.contains(searchName)
+  // 3. FINAL VALIDATION: Subtract illegal cards from the total count
+  int finalRecognized = totalInList;
+  nonBasics.forEach((name, qty) {
+    bool isConfirmed = confirmedNames.any((c) => 
+      c == name.toLowerCase() || c.contains(name.toLowerCase())
     );
-
-    if (found) {
-      recognizedCount++;
-    } else {
-      illegalCards.add(name);
+    if (!isConfirmed) {
+      illegalCards.add("$qty" + "x $name");
+      finalRecognized -= qty; // If API didn't find it, it's not "recognized"
     }
-  }
+  });
 
   return {
     'total': totalCost,
     'illegal': illegalCards,
-    'count': recognizedCount // This should now correctly reach 100
+    'count': finalRecognized // This will now correctly hit 100 if all cards are legal
   };
 }
 
@@ -410,6 +419,34 @@ void _showValidationResults(Map<String, dynamic> result) {
       ),
     );
   }
+
+void generatePods(List<dynamic> players) {
+  players.shuffle();
+  List<List<dynamic>> pods = [];
+  
+  if (selectedMode == TournamentMode.dual) {
+    // Standard 1v1 logic
+  } else {
+    // Multiplayer Logic: 
+    // This math ensures tables are either 4 or 3, never 2 or 5.
+    int remaining = players.length;
+    int index = 0;
+    
+    while (remaining > 0) {
+      int size;
+      if (remaining == 3 || remaining == 6 || remaining == 9) {
+        size = 3; // Force 3 if the remainder requires it
+      } else {
+        size = (remaining >= 4) ? 4 : remaining;
+      }
+      
+      pods.add(players.sublist(index, index + size));
+      index += size;
+      remaining -= size;
+    }
+  }
+}
+
 
 void _confirmStartTournament() {
   final activeCount = players.where((p) => p['isDropped'] != true).length;
@@ -960,28 +997,33 @@ Future<void> reportResult(String pName, num points, int rank, int tableId) async
  }
 
 Future<void> startNextRound() async {
-
-  // If we are currently on the LAST round, we finish instead of starting a new one
   if (currentRound >= maxRounds) {
     await _finishTournament();
     return;
   }
+
   try {
-    
     final response = await http.post(
       Uri.parse(_baseUrl('start')), 
       headers: {"Content-Type": "application/json"},
-      body: jsonEncode({'adminPassword': currentAdminPassword}),
+      body: jsonEncode({
+        'adminPassword': currentAdminPassword,
+        // We only send the MODE. The server's Step 6 handles the rest.
+        'mode': selectedMode.name, 
+      }),
     );
 
     if (response.statusCode == 200) {
+      // The server updated the round and assignments. 
+      // We just need to sync our UI.
       await refreshLobby();
     } else {
-      final error = jsonDecode(response.body)['error'];
-      _showSnackBar(error, Colors.red);
+      // Show server-side errors (like "Waiting for results")
+      final data = jsonDecode(response.body);
+      _showSnackBar(data['error'] ?? "Error starting round", Colors.red);
     }
   } catch (e) {
-    _showSnackBar("Connection Error: Check if server is running on :8080", Colors.red);
+    _showSnackBar("Connection Error: Check server status", Colors.red);
   }
 }
 
@@ -1262,10 +1304,10 @@ Widget _buildRoleSelection() {
           // --- Round Settings ---
           if (currentRound == 0)
             Padding(
-    padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-    child: Column(
-      children: [
-        Row(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+            child: Column(
+          children: [
+          Row(
           children: [
             // --- ROUNDS SETTING ---
             const Icon(Icons.timer, color: Colors.blueGrey),
@@ -1305,9 +1347,42 @@ Widget _buildRoleSelection() {
             const Spacer(),
           ],
         ),
-      ],
-    ),
-  ),
+      // --- TOURNAMENT MODE SETTING (Dual vs Multiplayer) ---
+              Row(
+                children: [
+                  const Icon(Icons.settings_suggest, color: Colors.blueGrey),
+                  const SizedBox(width: 12),
+                  const Text("Mode:", style: TextStyle(fontWeight: FontWeight.bold)),
+                  const SizedBox(width: 15),
+                  Expanded(
+                    child: SegmentedButton<TournamentMode>(
+                      showSelectedIcon: false,
+                      segments: const [
+                        ButtonSegment(
+                          value: TournamentMode.dual,
+                          label: Text("1v1 Dual"),
+                          icon: Icon(Icons.bolt, size: 16),
+                        ),
+                        ButtonSegment(
+                          value: TournamentMode.multiplayer,
+                          label: Text("Multi (3-4)"),
+                          icon: Icon(Icons.groups, size: 16),
+                        ),
+                      ],
+                      selected: {selectedMode},
+                      onSelectionChanged: (Set<TournamentMode> newSelection) {
+                        setState(() {
+                          selectedMode = newSelection.first;
+                        });
+                      },
+                    ),
+                  ),
+                ],
+              ),
+              const Divider(height: 32),
+            ],
+          ),
+        ),
 
           // --- Admin Actions ---
           Row(
@@ -1604,22 +1679,28 @@ Widget build(BuildContext context) {
     // 3. Floating Action Button: Changes behavior based on the Round
     floatingActionButton: (isAdmin && _currentIndex == 0 && !isFinished)
     ? FloatingActionButton(
+        tooltip: selectedMode == TournamentMode.dual 
+            ? "Start 1v1 Round" 
+            : "Generate Multi-Pods",
         onPressed: () {
           if (!_allResultsIn()) {
             _showPendingSnackBar();
             return;
           }
 
-          // If we are in the lobby, show the "Advice" pop-up
           if (currentRound == 0) {
             _confirmStartTournament();
           } else {
-            // If the round is already in progress, just start the next one normally
             startNextRound();
           }
         },
+        // Visual cue: Red for "Active/Ready", Grey for "Waiting on results"
         backgroundColor: _allResultsIn() ? Colors.redAccent : Colors.grey,
-        child: Icon(currentRound >= maxRounds ? Icons.emoji_events : Icons.play_arrow),
+        child: Icon(
+          currentRound >= maxRounds 
+              ? Icons.emoji_events // Trophy icon for finals
+              : (currentRound == 0 ? Icons.play_arrow : Icons.skip_next)
+        ),
       )
     : null,
   );
