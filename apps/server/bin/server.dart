@@ -263,22 +263,46 @@ router.post('/api/<room>/report-result', (Request request, String room) async {
   final data = jsonDecode(await request.readAsString());
   var r = getRoom(room);
   
-  // Update the player's total points
-  var player = r['players'].firstWhere((p) => p['name'] == data['name']);
-  player['points'] = (player['points'] as num) + (data['points'] as num);
+  // 1. Get current mode (default to multiplayer if not set)
+  String mode = r['mode'] ?? 'multiplayer';
   
-  // Add to history log
+  // 2. Determine points based on Rank and Mode
+  int rank = data['rank'] as int;
+  double pointsToAssign = 0;
+
+  if (mode == 'dual') {
+    // --- DUAL COMMANDER (1v1) ---
+    if (rank == 1) {
+      pointsToAssign = 3.0; // Win
+    } else if (rank == 0) {
+      pointsToAssign = 1.0; // Draw (Optional)
+    } else {
+      pointsToAssign = 0.0; // Loss
+    }
+  } else {
+    // --- MULTIPLAYER (Pods) ---
+    // Standard logic: 1st=4, 2nd=3, 3rd=2, 4th=1 (or your custom points)
+    if (rank == 1) {pointsToAssign = 4.0;}
+    else if (rank == 2) {pointsToAssign = 3.0;}
+    else if (rank == 3) {pointsToAssign = 2.0;}
+    else {pointsToAssign = 1.0;}
+  }
+
+  // 3. Update the player's total points
+  var player = r['players'].firstWhere((p) => p['name'] == data['name']);
+  player['points'] = (player['points'] as num) + pointsToAssign;
+  
+  // 4. Add to history log (Use pointsToAssign for security)
   r['history'].add({
     'player': data['name'],
-    'points': data['points'],
-    'rank': data['rank'],
+    'points': pointsToAssign, 
+    'rank': rank,
     'table': data['table'],
     'round': r['round'],
   });
   
-  // NEW: Save to JSON for resilience
   saveStateToFile(r);
-  return Response.ok(jsonEncode({'status': 'success'}));
+  return Response.ok(jsonEncode({'status': 'success', 'awarded': pointsToAssign}));
 });
 
   // ---------------- START ROUND ----------------
@@ -297,7 +321,7 @@ router.post('/api/<room>/start', (Request request, String room) async {
     return Response.badRequest(body: jsonEncode({'error': 'No players in the room!'}));
   }
 
-  // 2. Safety Check: Ensure everyone from the PREVIOUS round reported
+  // 2. Safety Check (Ensure everyone from PREVIOUS round reported)
   if (currentRound > 0 && assignments.isNotEmpty) {
     List<String> assignedNames = [];
     for (var table in assignments) {
@@ -318,16 +342,15 @@ router.post('/api/<room>/start', (Request request, String room) async {
     }
   }
 
-  // 3. Prepare for New Round
+  // --- 3. PREPARE FOR NEW ROUND & SAVE MODE ---
   r['round'] = currentRound + 1;
   r['status'] = 'started';
+  r['mode'] = selectedMode; // CRITICAL: Save this so report-result knows the rules!
 
-  // 4. Filter Active Players (Exclude Dropped)
-  // We take a shallow copy to avoid mutating the main list during sorting
+  // 4. Filter Active Players
   List activePlayers = players.where((p) => p['isDropped'] != true).toList();
 
   // 5. Swiss Sorting Logic
-  // Sort by Points (Primary) then SoS (Secondary)
   activePlayers.sort((a, b) {
     int cmp = (b['points'] as num).compareTo(a['points'] as num);
     if (cmp == 0) {
@@ -338,68 +361,66 @@ router.post('/api/<room>/start', (Request request, String room) async {
     return cmp;
   });
 
-  // 6. Create Tables (Swiss Pairing)
+  // 6. Create Tables
   List newAssignments = [];
   int tableCounter = 1;
 
   if (selectedMode == 'dual') {
-  // --- 1v1 SWISS PAIRING ---
-  while (activePlayers.length >= 2) {
-    var p1 = activePlayers.removeAt(0);
-    var p2 = activePlayers.removeAt(0);
-    newAssignments.add({
-      'table': tableCounter++,
-      'players': [p1['name'], p2['name']],
-    });
-  }
-} else {
-  // --- MULTIPLAYER PODS (3-4 Players) ---
-  while (activePlayers.length >= 3) {
-    int size = 4;
-    // Your Balanced Logic: force 3 if remainder is awkward or count is 3, 5, 6
-    if (activePlayers.length % 4 != 0 && activePlayers.length % 4 < 3 || 
-        [3, 5, 6].contains(activePlayers.length)) {
-      size = 3;
+    while (activePlayers.length >= 2) {
+      var p1 = activePlayers.removeAt(0);
+      var p2 = activePlayers.removeAt(0);
+      newAssignments.add({
+        'table': tableCounter++,
+        'players': [p1['name'], p2['name']],
+      });
     }
-
-    List tableNames = [];
-    for (int i = 0; i < size && activePlayers.isNotEmpty; i++) {
-      tableNames.add(activePlayers.removeAt(0)['name']);
+  } else {
+    while (activePlayers.length >= 3) {
+      int size = 4;
+      if (activePlayers.length % 4 != 0 && activePlayers.length % 4 < 3 || 
+          [3, 5, 6].contains(activePlayers.length)) {
+        size = 3;
+      }
+      List tableNames = [];
+      for (int i = 0; i < size && activePlayers.isNotEmpty; i++) {
+        tableNames.add(activePlayers.removeAt(0)['name']);
+      }
+      newAssignments.add({
+        'table': tableCounter++,
+        'players': tableNames,
+      });
     }
-
-    newAssignments.add({
-      'table': tableCounter++,
-      'players': tableNames,
-    });
   }
-}
 
-// 7. Handle Leftovers (Byes)
-if (activePlayers.isNotEmpty) {
-  for (var p in activePlayers) {
-    // Points for a BYE: 3.0 for Dual, 4.0 for Multi (depending on your rules)
-    double byePoints = (selectedMode == 'dual') ? 3.0 : 4.0;
-    
-    r['history'].add({
-      'player': p['name'],
-      'round': r['round'],
-      'points': byePoints, 
-      'rank': 1,
-      'table': 0, // 0 represents a BYE
-    });
-    
-    var playerInMainList = players.firstWhere((el) => el['name'] == p['name']);
-    playerInMainList['points'] = (playerInMainList['points'] as num) + byePoints;
+  // 7. Handle Leftovers (Byes)
+  if (activePlayers.isNotEmpty) {
+    for (var p in activePlayers) {
+      double byePoints = (selectedMode == 'dual') ? 3.0 : 4.0;
+      
+      r['history'].add({
+        'player': p['name'],
+        'round': r['round'],
+        'points': byePoints, 
+        'rank': 1,
+        'table': 0, 
+      });
+      
+      var playerInMainList = players.firstWhere((el) => el['name'] == p['name']);
+      playerInMainList['points'] = (playerInMainList['points'] as num) + byePoints;
+    }
   }
-}
 
   r['assignments'] = newAssignments;
+  
+  // 8. PERSIST TO DISK
+  saveStateToFile(r); // Ensure changes are saved if server restarts
 
   return Response.ok(
     jsonEncode({
       'status': r['status'],
       'round': r['round'],
-      'assignments': r['assignments']
+      'assignments': r['assignments'],
+      'mode': r['mode'], // Return the mode to the client for UI confirmation
     }),
     headers: {'content-type': 'application/json'}
   );
