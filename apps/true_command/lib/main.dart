@@ -1303,109 +1303,118 @@ Widget _buildRoleSelection() {
         if (isAdmin) ...[
           // --- Round Settings ---
           if (currentRound == 0)
-            Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+        Card(
+          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          elevation: 4,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
             child: Column(
-          children: [
-          Row(
-          children: [
-            // --- ROUNDS SETTING ---
-            const Icon(Icons.timer, color: Colors.blueGrey),
-            const SizedBox(width: 12),
-            const Text("Rounds:", style: TextStyle(fontWeight: FontWeight.bold)),
-            const SizedBox(width: 10),
-            SizedBox(
-              width: 50,
-              child: TextField(
-                controller: _roundsController,
-                keyboardType: TextInputType.number,
-                textAlign: TextAlign.center,
-                decoration: const InputDecoration(isDense: true),
-                onChanged: (val) => setState(() => maxRounds = int.tryParse(val) ?? 3),
-              ),
-            ),
-            const SizedBox(width: 20),
-            
-            // --- BUDGET SETTING ---
-            const Icon(Icons.euro, color: Colors.green, size: 20),
-            const SizedBox(width: 8),
-            const Text("Budget:", style: TextStyle(fontWeight: FontWeight.bold)),
-            const SizedBox(width: 10),
-            SizedBox(
-              width: 60,
-              child: TextField(
-                keyboardType: TextInputType.number,
-                textAlign: TextAlign.center,
-                decoration: const InputDecoration(isDense: true, suffixText: "€"),
-                onChanged: (val) {
-                  setState(() {
-                    tournamentBudgetLimit = double.tryParse(val) ?? 70.0;
-                  });
-                },
-              ),
-            ),
-            const Spacer(),
-          ],
-        ),
-      // --- TOURNAMENT MODE SETTING (Dual vs Multiplayer) ---
-              Row(
-                children: [
-                  const Icon(Icons.settings_suggest, color: Colors.blueGrey),
-                  const SizedBox(width: 12),
-                  const Text("Mode:", style: TextStyle(fontWeight: FontWeight.bold)),
-                  const SizedBox(width: 15),
-                  Expanded(
-                    child: SegmentedButton<TournamentMode>(
-                      showSelectedIcon: false,
-                      segments: const [
-                        ButtonSegment(
-                          value: TournamentMode.dual,
-                          label: Text("1v1 Dual"),
-                          icon: Icon(Icons.bolt, size: 16),
-                        ),
-                        ButtonSegment(
-                          value: TournamentMode.multiplayer,
-                          label: Text("Multi (3-4)"),
-                          icon: Icon(Icons.groups, size: 16),
-                        ),
-                      ],
-                      selected: {selectedMode},
-                      onSelectionChanged: (Set<TournamentMode> newSelection) {
-                        setState(() {
-                          selectedMode = newSelection.first;
-                        });
-                      },
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  "Tournament Configuration",
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                ),
+                const Divider(),
+                const SizedBox(height: 8),
+                
+                // --- ROW 1: ROUNDS & BUDGET ---
+                Row(
+                  children: [
+                    const Icon(Icons.timer, color: Colors.blueGrey, size: 20),
+                    const SizedBox(width: 8),
+                    const Text("Rounds:", style: TextStyle(fontWeight: FontWeight.bold)),
+                    const SizedBox(width: 8),
+                    SizedBox(
+                      width: 45,
+                      child: TextField(
+                        controller: _roundsController,
+                        keyboardType: TextInputType.number,
+                        textAlign: TextAlign.center,
+                        decoration: const InputDecoration(isDense: true),
+                        onChanged: (val) => setState(() => maxRounds = int.tryParse(val) ?? 3),
+                      ),
                     ),
-                  ),
-                ],
-              ),
-              const Divider(height: 32),
-            ],
+                    const Spacer(),
+                    const Icon(Icons.euro, color: Colors.green, size: 20),
+                    const SizedBox(width: 8),
+                    const Text("Budget:", style: TextStyle(fontWeight: FontWeight.bold)),
+                    const SizedBox(width: 8),
+                    SizedBox(
+                      width: 55,
+                      child: TextField(
+                        keyboardType: TextInputType.number,
+                        textAlign: TextAlign.center,
+                        decoration: const InputDecoration(isDense: true, suffixText: "€"),
+                        onChanged: (val) => setState(() => tournamentBudgetLimit = double.tryParse(val) ?? 70.0),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+
+                // --- ROW 2: TOURNAMENT MODE (Dual vs Multi) ---
+                Row(
+                  children: [
+                    const Icon(Icons.settings_suggest, color: Colors.blueGrey, size: 20),
+                    const SizedBox(width: 8),
+                    const Text("Format:", style: TextStyle(fontWeight: FontWeight.bold)),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: SegmentedButton<TournamentMode>(
+                        showSelectedIcon: false,
+                        segments: const [
+                          ButtonSegment(
+                            value: TournamentMode.dual,
+                            label: Text("1v1 Dual"),
+                            icon: Icon(Icons.bolt, size: 16),
+                          ),
+                          ButtonSegment(
+                            value: TournamentMode.multiplayer,
+                            label: Text("Multi (3-4)"),
+                            icon: Icon(Icons.groups, size: 16),
+                          ),
+                        ],
+                        selected: {selectedMode},
+                        onSelectionChanged: (Set<TournamentMode> newSelection) {
+                          setState(() => selectedMode = newSelection.first);
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
 
-          // --- Admin Actions ---
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              TextButton.icon(
-                onPressed: _showJoinQR,
-                icon: const Icon(Icons.qr_code, color: Colors.blue),
-                label: const Text("Show QR"),
-              ),
-              ElevatedButton.icon(
-                onPressed: _showDeckValidator,
-                icon: const Icon(Icons.fact_check),
-                label: const Text("Check Deck Cost"),
-              ),
-              TextButton.icon(
-                onPressed: _showChangePasswordDialog,
-                icon: const Icon(Icons.lock_open, color: Colors.orange),
-                label: const Text("New Password"),
-              ),
-            ],
-          ),
-          const Divider(),
+// --- Admin Quick Actions Bar ---
+      Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8.0),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: [
+            TextButton.icon(
+              onPressed: _showJoinQR,
+              icon: const Icon(Icons.qr_code, color: Colors.blue),
+              label: const Text("Show QR"),
+            ),
+            ElevatedButton.icon(
+              onPressed: _showDeckValidator,
+              icon: const Icon(Icons.fact_check),
+              label: const Text("Check Deck Validation"),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.blue.shade50),
+            ),
+            TextButton.icon(
+              onPressed: _showChangePasswordDialog,
+              icon: const Icon(Icons.lock_open, color: Colors.orange),
+              label: const Text("New Password"),
+            ),
+          ],
+        ),
+      ),
+      const Divider(),
          // --- Manage Players Expansion ---
           ExpansionTile(
             leading: const Icon(Icons.people_outline),
