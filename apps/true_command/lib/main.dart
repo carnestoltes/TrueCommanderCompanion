@@ -295,7 +295,17 @@ void _showAboutUs() {
           const SizedBox(height: 16),
           ClipRRect(
             borderRadius: BorderRadius.circular(12),
-            child: Image.asset('assets/AboutUs.png', fit: BoxFit.cover, height: 200),
+            child: Image.asset('assets/AboutUs.png', fit: BoxFit.cover, height: 200, errorBuilder: (context, error, stackTrace) {
+                    return Container(
+                      height: 200,
+                      decoration: BoxDecoration(
+                        color: Colors.grey[200],
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(Icons.group, size: 50, color: Colors.grey),
+                    );
+                  },
+                )
           ),
           const SizedBox(height: 16),
           const Text(
