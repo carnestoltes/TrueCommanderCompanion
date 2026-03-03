@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:shelf/shelf.dart';
-import 'package:shelf/shelf_io.dart';
+import 'package:shelf/shelf_io.dart' as io;
 import 'package:shelf_router/shelf_router.dart';
 import 'package:shelf_static/shelf_static.dart';
 
@@ -472,6 +472,6 @@ router.post('/api/<room>/start', (Request request, String room) async {
   final port = int.parse(Platform.environment['PORT'] ?? '8080');
   //await io.serve(handler, InternetAddress.anyIPv4, port);
 
-  await serve(handler, '0.0.0.0', port);
+  await io.serve(handler, '0.0.0.0', port);
   print('Server running on port $port');
 }

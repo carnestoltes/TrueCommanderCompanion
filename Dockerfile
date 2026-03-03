@@ -27,7 +27,7 @@ COPY packages/shared_logic/pubspec.yaml ./packages/shared_logic/
 COPY apps/server/ ./apps/server/
 COPY packages/shared_logic/ ./packages/shared_logic/
 
-WORKDIR /app/apps/server
+WORKDIR /app/apps/server/bin
 RUN dart compile exe bin/server.dart -o /app/server_bin
 
 # ---------- STAGE 3: Final Runtime ----------
