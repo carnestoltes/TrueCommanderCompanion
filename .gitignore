@@ -3,10 +3,6 @@
 *.bat
 
 # Ignore the heavy stuff
-*/build/
-*/.dart_tool/
-*/.pub/
-*/.packages
-*/.flutter-plugins*
+
 */.idea/
 */.vscode/
