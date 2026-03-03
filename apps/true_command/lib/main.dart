@@ -460,7 +460,7 @@ void _showValidationResults(Map<String, dynamic> result) {
             ClipRRect(
               borderRadius: BorderRadius.circular(10),
               child: LinearProgressIndicator(
-                value: (total / limit).clamp(0.0, 1.0),
+                value: (total / tournamentBudgetLimit).clamp(0.0, 1.0),
                 minHeight: 12,
                 backgroundColor: Colors.grey[200],
                 color: isBudgetOk ? Colors.green : Colors.red,
@@ -472,14 +472,14 @@ void _showValidationResults(Map<String, dynamic> result) {
               children: [
                 Text("${total.toStringAsFixed(2)}€", 
                     style: TextStyle(fontWeight: FontWeight.bold, color: isBudgetOk ? Colors.green : Colors.red)),
-                Text("Limit: ${limit.toInt()}€", style: const TextStyle(fontSize: 12)),
+                Text("Limit: ${tournamentBudgetLimit.toInt()}€", style: const TextStyle(fontSize: 12)),
               ],
             ),
             const Divider(height: 30),
 
             // --- Status Cards ---
-            _buildStatusRow(Icons.Style, "Card Count", "$count/100", count == 100 ? Colors.green : Colors.orange),
-            _buildStatusRow(Icons.Gavel, "Legality", isLegal ? "Legal" : "${result['illegal'].length} Errors", isLegal ? Colors.green : Colors.red),
+            _buildStatusRow(Icons.style, "Card Count", "$count/100", count == 100 ? Colors.green : Colors.orange),
+            _buildStatusRow(Icons.gavel, "Legality", isLegal ? "Legal" : "${result['illegal'].length} Errors", isLegal ? Colors.green : Colors.red),
             
             if (!isLegal) ...[
               const SizedBox(height: 15),
