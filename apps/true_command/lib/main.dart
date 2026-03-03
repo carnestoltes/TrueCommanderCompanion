@@ -68,7 +68,8 @@ class TournamentApp extends StatefulWidget {
 
 class _TournamentAppState extends State<TournamentApp> {
   // --- CONFIGURATION ---
-  String serverUrl = "https://truecommandercompanion.onrender.com"; 
+  String serverUrl = "https://truecommandercompanion.onrender.com";
+  //String serverUrl = "https://192.168.1.13:8080"; // Local testing URL (use your actual local IP)
   
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _roomController = TextEditingController(); 
@@ -148,8 +149,8 @@ Future<Map<String, dynamic>> checkCommanderDeck(List<String> decklist, double bu
 }
   
 Future<Map<String, dynamic>> _runScryfallCheck(
-    List<String> decklist, 
-    Function(double) onProgress) async {
+  List<String> decklist, 
+  Function(double) onProgress) async {
   
   double totalCost = 0;
   int totalInList = 0;
@@ -295,11 +296,11 @@ void _showAboutUs() {
           const SizedBox(height: 16),
           ClipRRect(
             borderRadius: BorderRadius.circular(12),
-            child: Image.asset('assets/team.jpg', fit: BoxFit.cover, height: 200),
+            child: Image.asset('assets/AboutUs.png', fit: BoxFit.cover, height: 200),
           ),
           const SizedBox(height: 16),
           const Text(
-            "Welcome to our tournament management system. We created this tool to handle the complex Swiss pairings required for both Dual Commander and Multiplayer Pods.",
+            "Somos dos hermanos con una pasión compartida por el formato Commander de Magic: The Gathering. Inspirados por la necesidad de una herramienta que simplificara la gestión de torneos y mejorara la experiencia de juego, decidimos crear esta aplicación. Nuestro objetivo es ofrecer una plataforma intuitiva y eficiente para jugadores y organizadores, facilitando la administración de eventos y promoviendo la comunidad de Commander.",
             style: TextStyle(fontSize: 16, height: 1.5),
           ),
         ],
