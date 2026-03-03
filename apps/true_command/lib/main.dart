@@ -946,7 +946,7 @@ void _showPendingSnackBar() {
 }
 
 Future<void> _launchRulesPDF() async {
-  final Uri url = Uri.parse('https://github.com/carnestoltes/TrueCommanderCompanion/rules/reglasBEDH.pdf');
+  final Uri url = Uri.parse('https://github.com/carnestoltes/TrueCommanderCompanion/blob/main/rules/reglasBEDH.pdf');
   if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Could not open the rules")));
   }
