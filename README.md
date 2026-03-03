@@ -23,6 +23,7 @@ TrueCommanderCompanion/
 │   └── true_commander/   # Flutter Mobile App (Android/iOS)
 └── packages/
     └── shared_logic/     # Shared Domain Models & Swiss Services
+```
 
 ## Server Module
 
