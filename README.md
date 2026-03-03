@@ -61,15 +61,13 @@ Unlike simple tie-breakers, this system uses the Buchholz System:
 
 **4. Admin "In-Game" Rules**
 
-To handle the "Draw" problem in timed Commander rounds, the Admin can trigger a randomized tie-breaker rule (16.6% probability) based on:
-
 ### Motivation
 
 The point is reaching the way to break the tie in a way fairness and not suggested for early abuse playing around it.
 
 * The rule only assign when the admin in one of the round select the option.
 
-For improve the experience in game and trying to minimize the role playing around this rules, i will extend and implement a 6 specific rules obtaining as result a probability of 16,6% equally. The presentation of tiebreaker rules are show below:
+To handle the "Draw" problem in timed Commander rounds, the Admin can trigger a randomized tie-breaker rule (16.6% probability) based on:
 
 ### Total Life
 
