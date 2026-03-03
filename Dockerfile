@@ -1,5 +1,5 @@
 # ---------- STAGE 1: Build Flutter Web ----------
-FROM cirrusci/flutter:stable AS web-build
+FROM ghcr.io/cirruslabs/flutter:3.24.0 AS builder
 WORKDIR /app
 
 RUN flutter config --enable-web
