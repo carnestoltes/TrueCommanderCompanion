@@ -191,7 +191,7 @@ This rules applies the logical of count a buch of permanents in your board *excl
 Account for number of entites could produce mana like, mana rocks, mana dorks ...
 
 ## Blog
-[Commander Highlander BEDH](https://sites.google.com/view/magicbedh)
+[Budget Elder Dragon Highlander](https://sites.google.com/view/magicbedh)
 
 ## Rules in Spanish
 [Reglamento](rules/reglasBEDH.pdf)
