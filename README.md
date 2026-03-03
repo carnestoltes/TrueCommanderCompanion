@@ -6,7 +6,7 @@
 [![Scryfall API](https://img.shields.io/badge/API-Scryfall-red?style=for-the-badge)](https://scryfall.com/docs/api)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg?style=for-the-badge)](https://www.gnu.org/licenses/gpl-3.0)
 
-**Commander BEDH** is a full-stack tournament management system specifically engineered for the unique challenges of 4-player Commander (EDH) pods. It replaces naive pairing systems with a **Balanced Swiss** model to ensure competitive integrity.
+**Commander BEDH** is a full-stack tournament management system specifically engineered for the unique challenges of multiplayer/duel Commander (EDH) pods. It replaces naive pairing systems with a **Balanced Swiss** model to ensure competitive integrity.
 
 ---
 
