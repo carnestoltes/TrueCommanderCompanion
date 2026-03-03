@@ -47,8 +47,6 @@ Unlike simple tie-breakers, this system uses the Buchholz System:
 
 *Scryfall Integration:* Real-time decklist validation checking for card legality and budget limits.
 
-*Buffer Logic:* Automatically applies a 10% price buffer to account for market fluctuations.
-
 *UX-Focused:* Features a smooth progress-driven UI to handle large batch queries without user anxiety.
 
 **4. Admin "In-Game" Rules**
