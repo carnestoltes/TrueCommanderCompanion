@@ -321,18 +321,28 @@ void _showFAQ() {
               children: const [
                 ListTile(
                   leading: Icon(Icons.check_circle_outline, color: Colors.green),
-                  title: Text("Swiss Pairings"),
-                  subtitle: Text("Calculated via Points > SoS."),
+                  title: Text("Multiplayer Commander"),
+                  subtitle: Text("Mesas de 3-4 jugadores con 4/2.5/1 | 4/3/2/1 asignación de puntos."),
                 ),
                 ListTile(
                   leading: Icon(Icons.check_circle_outline, color: Colors.green),
-                  title: Text("Dual Mode"),
-                  subtitle: Text("1v1 matchups with 3 points per win."),
+                  title: Text("Duel Commander"),
+                  subtitle: Text("Partidas 1vs1 con 3 puntos para el ganador."),
                 ),
                 ListTile(
                   leading: Icon(Icons.check_circle_outline, color: Colors.green),
-                  title: Text("Multiplayer Mode"),
-                  subtitle: Text("3-4 player pods with 4/3/2/1 point distribution."),
+                  title: Text("Strength of Schedule (SoS)"),
+                  subtitle: Text("Herramienta de desempate en caso de empate a puntos basada en la presencia en el torneo (performance)."),
+                ),
+                ListTile(
+                  leading: Icon(Icons.check_circle_outline, color: Colors.green),
+                  title: Text("Acceso como participante"),
+                  subtitle: Text("Introduce el nombre del evento sin asignar ninguna contraseña"),
+                ),
+                 ListTile(
+                  leading: Icon(Icons.check_circle_outline, color: Colors.green),
+                  title: Text("Acceso como administrador"),
+                  subtitle: Text("Introduce el nombre del evento e introduce la contraseña por defecto: admin123. Se recomienda cambiar la contraseña antes de comenzar el evento."),
                 ),
               ],
             ),
@@ -869,7 +879,7 @@ Future<void> _launchRulesPDF() async {
 }
 
 Future<void> _launchBEDH() async {
-  final Uri url = Uri.parse('https://');
+  final Uri url = Uri.parse('https://sites.google.com/view/magicbedh');
   if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Could not access to blog")));
   }
@@ -1362,7 +1372,7 @@ Widget _buildRoleSelection() {
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
           _buildFooterLink("REGLAMENTO", Icons.picture_as_pdf_outlined, _launchRulesPDF),
-          _buildFooterLink("BLOG", Icons.picture_as_pdf_outlined, _launchBEDH),
+          _buildFooterLink("BLOG", Icons.article_outlined, _launchBEDH),
           _buildFooterLink("FAQ", Icons.help_outline, _showFAQ),
           _buildFooterLink("CONOCENOS", Icons.info_outline, _showAboutUs),
         ],
