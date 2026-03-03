@@ -8,6 +8,7 @@
 
 **Commander BEDH** is a full-stack tournament management system specifically engineered for the unique challenges of multiplayer/duel Commander (EDH) pods. It replaces naive pairing systems with a **Balanced Swiss** model to ensure competitive integrity.
 
+![About US](pictures/AboutUS.png)
 ---
 
 ## System Architecture
