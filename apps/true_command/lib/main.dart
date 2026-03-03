@@ -146,8 +146,11 @@ Future<Map<String, dynamic>> checkCommanderDeck(List<String> decklist, double bu
     'illegalCards': illegalCards,
   };
 }
-
-Future<Map<String, dynamic>> _runScryfallCheck(List<String> decklist) async {
+  
+Future<Map<String, dynamic>> _runScryfallCheck(
+    List<String> decklist, 
+    Function(double) onProgress) async {
+  
   double totalCost = 0;
   int totalInList = 0;
   List<String> illegalCards = [];
@@ -159,22 +162,21 @@ Future<Map<String, dynamic>> _runScryfallCheck(List<String> decklist) async {
     'snow-covered island', 'snow-covered mountain', 'wastes'
   };
 
-  // 1. SYNC PASS: Count everything and filter basics
+  // 1. Initial Parsing
   for (var line in decklist) {
     final match = RegExp(r'^(\d+)x?\s+(.*)$').firstMatch(line.trim());
     int qty = match != null ? int.parse(match.group(1)!) : 1;
     String name = (match != null ? match.group(2)! : line).trim();
-    
     if (name.isEmpty) continue;
     
-    totalInList += qty; // Start building toward 100 immediately
-    
+    totalInList += qty;
     if (!basicLands.contains(name.toLowerCase())) {
       nonBasics[name] = (nonBasics[name] ?? 0) + qty;
     }
   }
+  onProgress(0.1); // 10% done after parsing
 
-  // 2. ASYNC PASS: Fetch prices for non-basics
+  // 2. Async API Pass
   List<String> queryNames = nonBasics.keys.toList();
   List<String> confirmedNames = [];
 
@@ -182,6 +184,10 @@ Future<Map<String, dynamic>> _runScryfallCheck(List<String> decklist) async {
     var batch = queryNames.sublist(i, i + 15 > queryNames.length ? queryNames.length : i + 15);
     String query = batch.map((n) => '!"$n"').join(' OR ');
     String url = "https://api.scryfall.com/cards/search?q=${Uri.encodeComponent("f:commander ($query)")}&unique=cards&order=eur";
+
+    // Update progress between 10% and 90%
+    double currentProgress = 0.1 + ((i / queryNames.length) * 0.8);
+    onProgress(currentProgress);
 
     try {
       final response = await http.get(Uri.parse(url));
@@ -191,11 +197,9 @@ Future<Map<String, dynamic>> _runScryfallCheck(List<String> decklist) async {
           String sName = card['name'].toString().toLowerCase();
           confirmedNames.add(sName);
 
-          // Price + 10% Buffer
           String? pStr = card['prices']['eur'] ?? card['prices']['eur_foil'];
           double price = (double.tryParse(pStr ?? "0") ?? 0) * 1.10;
 
-          // Find qty from our map
           String originalKey = nonBasics.keys.firstWhere(
             (k) => sName == k.toLowerCase() || sName.contains(k.toLowerCase()),
             orElse: () => ""
@@ -209,7 +213,7 @@ Future<Map<String, dynamic>> _runScryfallCheck(List<String> decklist) async {
     await Future.delayed(const Duration(milliseconds: 100));
   }
 
-  // 3. FINAL VALIDATION: Subtract illegal cards from the total count
+  // 3. Final Reconciliation
   int finalRecognized = totalInList;
   nonBasics.forEach((name, qty) {
     bool isConfirmed = confirmedNames.any((c) => 
@@ -217,18 +221,17 @@ Future<Map<String, dynamic>> _runScryfallCheck(List<String> decklist) async {
     );
     if (!isConfirmed) {
       illegalCards.add("$qty" + "x $name");
-      finalRecognized -= qty; // If API didn't find it, it's not "recognized"
+      finalRecognized -= qty; 
     }
   });
 
+  onProgress(1.0); // 100% complete
   return {
     'total': totalCost,
     'illegal': illegalCards,
-    'count': finalRecognized // This will now correctly hit 100 if all cards are legal
+    'count': finalRecognized
   };
 }
-
-
 @override
 void initState() {
   super.initState();
@@ -356,6 +359,7 @@ void _showFAQ() {
 void _showDeckValidator() {
   TextEditingController deckController = TextEditingController();
   bool isChecking = false;
+  double progress = 0.0; // Track progress percentage
 
   showDialog(
     context: context,
@@ -378,8 +382,19 @@ void _showDeckValidator() {
             ),
             if (isChecking) ...[
               const SizedBox(height: 20),
-              const LinearProgressIndicator(),
-              const Text("Checking prices & legality...", style: TextStyle(fontSize: 12)),
+              // --- THE PROGRESS BAR ---
+              ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: LinearProgressIndicator(
+                  value: progress, 
+                  minHeight: 8,
+                  backgroundColor: Colors.grey[200],
+                  valueColor: const AlwaysStoppedAnimation<Color>(Colors.blueAccent),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text("${(progress * 100).toInt()}% Checked", 
+                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blueAccent)),
             ]
           ],
         ),
@@ -387,17 +402,22 @@ void _showDeckValidator() {
           TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
           ElevatedButton(
             onPressed: isChecking ? null : () async {
-              setDialogState(() => isChecking = true);
-              
-              // Parse the raw text into a clean list of names
-              List<String> cleanList = deckController.text
+              setDialogState(() {
+                isChecking = true;
+                progress = 0.05; // Start with a little bit of progress
+              });
+
+              // Pass the raw lines to the logic function
+              List<String> rawLines = deckController.text
                   .split(RegExp(r'[\n\r]'))
-                  .map((line) => line.replaceAll(RegExp(r'^\d+x?\s+'), '').trim())
-                  .where((line) => line.isNotEmpty)
+                  .where((line) => line.trim().isNotEmpty)
                   .toList();
 
-              var result = await _runScryfallCheck(cleanList);
-              
+              // Pass the progress callback to the logic function
+              var result = await _runScryfallCheck(rawLines, (newProgress) {
+                setDialogState(() => progress = newProgress);
+              });
+
               setDialogState(() => isChecking = false);
               Navigator.pop(context); // Close input
               _showValidationResults(result); // Show results
@@ -409,46 +429,101 @@ void _showDeckValidator() {
     ),
   );
 }
-
+  
 void _showValidationResults(Map<String, dynamic> result) {
-  bool isBudgetOk = result['total'] <= tournamentBudgetLimit; // Example budget of 70€
+  // Use a variable or hardcoded limit (e.g., 70.0)
+  const double limit = 70.0; 
+  double total = result['total'] ?? 0.0;
+  bool isBudgetOk = total <= limit;
   bool isLegal = result['illegal'].isEmpty;
+  int count = result['count'] ?? 0;
 
   showDialog(
     context: context,
     builder: (context) => AlertDialog(
-      title: Text(isLegal && isBudgetOk ? "Deck Validated ✅" : "Validation Failed ❌"),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      title: Row(
+        children: [
+          Icon(
+            isLegal && isBudgetOk ? Icons.check_circle : Icons.error,
+            color: isLegal && isBudgetOk ? Colors.green : Colors.red,
+          ),
+          const SizedBox(width: 10),
+          Text(isLegal && isBudgetOk ? "Deck Validated" : "Validation Issues"),
+        ],
+      ),
       content: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text("Total Cost (Cheapest EUR): ${result['total'].toStringAsFixed(2)}€",
-                style: TextStyle(fontWeight: FontWeight.bold, color: isBudgetOk ? Colors.green : Colors.red)),
-            const Divider(),
-            if (!isLegal) ...[
-              const Text("Illegal or Unrecognized Cards:", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
-              ...result['illegal'].map<Widget>((c) => Text("• $c")).toList(),
-              const SizedBox(height: 10),
-            ],
-            Text("Card Count Recognized: ${result['count'] ?? 0}/100"),
+            // --- Budget Progress Section ---
+            const Text("Budget Utilization", style: TextStyle(fontSize: 12, color: Colors.grey)),
+            const SizedBox(height: 5),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: LinearProgressIndicator(
+                value: (total / limit).clamp(0.0, 1.0),
+                minHeight: 12,
+                backgroundColor: Colors.grey[200],
+                color: isBudgetOk ? Colors.green : Colors.red,
+              ),
+            ),
+            const SizedBox(height: 5),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text("${total.toStringAsFixed(2)}€", 
+                    style: TextStyle(fontWeight: FontWeight.bold, color: isBudgetOk ? Colors.green : Colors.red)),
+                Text("Limit: ${limit.toInt()}€", style: const TextStyle(fontSize: 12)),
+              ],
+            ),
+            const Divider(height: 30),
+
+            // --- Status Cards ---
+            _buildStatusRow(Icons.Style, "Card Count", "$count/100", count == 100 ? Colors.green : Colors.orange),
+            _buildStatusRow(Icons.Gavel, "Legality", isLegal ? "Legal" : "${result['illegal'].length} Errors", isLegal ? Colors.green : Colors.red),
             
-            Text("Summary:"),
-            Text("• Total Price: ${result['total'].toStringAsFixed(2)}€"),
-            Text("• Cards Recognized: ${result['count']}/100"),
-            if (result['illegal'].isNotEmpty) 
-              Text("• Issues: ${result['illegal'].length} cards failed check.", 
-                  style: TextStyle(color: Colors.red)),
+            if (!isLegal) ...[
+              const SizedBox(height: 15),
+              const Text("Unrecognized or Illegal:", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red)),
+              Container(
+                margin: const EdgeInsets.only(top: 5),
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(color: Colors.red[50], borderRadius: BorderRadius.circular(8)),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: result['illegal'].map<Widget>((c) => Text("• $c", style: const TextStyle(fontSize: 12, color: Colors.red))).toList(),
+                ),
+              ),
+            ],
           ],
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text("Close"))
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text("Done"),
+        )
       ],
     ),
   );
 }
 
- 
+// Helper for status rows
+Widget _buildStatusRow(IconData icon, String label, String value, Color color) {
+  return Padding(
+    padding: const EdgeInsets.symmetric(vertical: 4.0),
+    child: Row(
+      children: [
+        Icon(icon, size: 18, color: Colors.blueGrey),
+        const SizedBox(width: 10),
+        Text(label),
+        const Spacer(),
+        Text(value, style: TextStyle(fontWeight: FontWeight.bold, color: color)),
+      ],
+    ),
+  );
+} 
   // 2. Revised Password Dialog
   void _showChangePasswordDialog() {
     TextEditingController passController = TextEditingController();
