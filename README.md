@@ -194,7 +194,7 @@ Account for number of entites could produce mana like, mana rocks, mana dorks ..
 [https://sites.google.com/view/magicbedh]
 
 ## Rules in Spanish
-[https://drive.google.com/file/d/1JR_MFuC7W1gXlIDCWRgXho9N8UAkhSFv/view]
+[rules/Bases ampliadas del torneo BEDH.pdf]
 
 ## Collaboration
 *In this section i want to thank a person has gone to the care to develop a modality inside of Commander for make arrive everyone the posibility of a good experience agains others formats prioritizing the ingenuity versus stapples*
