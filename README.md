@@ -194,7 +194,7 @@ Account for number of entites could produce mana like, mana rocks, mana dorks ..
 [Commander Highlander BEDH](https://sites.google.com/view/magicbedh)
 
 ## Rules in Spanish
-[Reglamento](rules/rulesBEDH.pdf)
+[Reglamento](rules/reglasBEDH.pdf)
 
 ## Rules in English
 [Ruling](rules/rulesBEDH.pdf)
