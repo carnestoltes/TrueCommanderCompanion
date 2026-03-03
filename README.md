@@ -4,7 +4,7 @@
 [![Dart](https://img.shields.io/badge/Dart-0175C2?style=for-the-badge&logo=dart&logoColor=white)](https://dart.dev)
 [![Flutter](https://img.shields.io/badge/Flutter-02569B?style=for-the-badge&logo=flutter&logoColor=white)](https://flutter.dev)
 [![Scryfall API](https://img.shields.io/badge/API-Scryfall-red?style=for-the-badge)](https://scryfall.com/docs/api)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg?style=for-the-badge)](https://www.gnu.org/licenses/gpl-3.0)
 
 **Commander BEDH** is a full-stack tournament management system specifically engineered for the unique challenges of 4-player Commander (EDH) pods. It replaces naive pairing systems with a **Balanced Swiss** model to ensure competitive integrity.
 
