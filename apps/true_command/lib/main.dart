@@ -430,11 +430,9 @@ void _showDeckValidator() {
   );
 }
   
-void _showValidationResults(Map<String, dynamic> result) {
-  // Use a variable or hardcoded limit (e.g., 70.0)
-  const double limit = 70.0; 
+void _showValidationResults(Map<String, dynamic> result) { 
   double total = result['total'] ?? 0.0;
-  bool isBudgetOk = total <= limit;
+  bool isBudgetOk = total <= tournamentBudgetLimit;
   bool isLegal = result['illegal'].isEmpty;
   int count = result['count'] ?? 0;
 
