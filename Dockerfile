@@ -24,7 +24,7 @@ WORKDIR /app
 COPY apps/server/pubspec.yaml ./apps/server/
 COPY packages/shared_logic/pubspec.yaml ./packages/shared_logic/
 
-WORKDIR /app/apps/server
+WORKDIR /app
 RUN dart pub get
 
 WORKDIR /app
