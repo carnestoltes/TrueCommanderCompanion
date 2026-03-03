@@ -20,7 +20,7 @@
 TrueCommanderCompanion/
 ├── apps/
 │   ├── server/           # Shelf-based Dart REST API
-│   └── true_commander/   # Flutter Mobile App (Android/iOS)
+│   └── true_commander/   # Flutter App 
 └── packages/
     └── shared_logic/     # Shared Domain Models & Swiss Services
 ```
