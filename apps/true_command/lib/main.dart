@@ -9,6 +9,7 @@ import 'package:go_router/go_router.dart';
 import 'package:file_picker/file_picker.dart';
 import 'dart:io';
 import 'package:flutter/foundation.dart'; // For kIsWeb
+import 'package:url_launcher/url_launcher.dart';
 
 enum TournamentMode { dual, multiplayer }
 TournamentMode selectedMode = TournamentMode.multiplayer; // Default
@@ -275,6 +276,73 @@ void initState() {
   return true; 
 }
 
+void _showAboutUs() {
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+    builder: (context) => DraggableScrollableSheet(
+      initialChildSize: 0.7,
+      expand: false,
+      builder: (_, controller) => ListView(
+        controller: controller,
+        padding: const EdgeInsets.all(24),
+        children: [
+          const Text("About Commander BEDH", style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 16),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: Image.asset('assets/team.jpg', fit: BoxFit.cover, height: 200),
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            "Welcome to our tournament management system. We created this tool to handle the complex Swiss pairings required for both Dual Commander and Multiplayer Pods.",
+            style: TextStyle(fontSize: 16, height: 1.5),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+void _showFAQ() {
+  showModalBottomSheet(
+    context: context,
+    shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+    builder: (context) => Padding(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text("Features & Settings", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+          const Divider(),
+          Expanded(
+            child: ListView(
+              children: const [
+                ListTile(
+                  leading: Icon(Icons.check_circle_outline, color: Colors.green),
+                  title: Text("Swiss Pairings"),
+                  subtitle: Text("Calculated via Points > SoS."),
+                ),
+                ListTile(
+                  leading: Icon(Icons.check_circle_outline, color: Colors.green),
+                  title: Text("Dual Mode"),
+                  subtitle: Text("1v1 matchups with 3 points per win."),
+                ),
+                ListTile(
+                  leading: Icon(Icons.check_circle_outline, color: Colors.green),
+                  title: Text("Multiplayer Mode"),
+                  subtitle: Text("3-4 player pods with 4/3/2/1 point distribution."),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+  
 void _showDeckValidator() {
   TextEditingController deckController = TextEditingController();
   bool isChecking = false;
@@ -793,6 +861,19 @@ void _showPendingSnackBar() {
   );
 }
 
+Future<void> _launchRulesPDF() async {
+  final Uri url = Uri.parse('https://github.com/carnestoltes/TrueCommanderCompanion/rules/reglasBEDH.pdf');
+  if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Could not open the rules")));
+  }
+}
+
+Future<void> _launchBEDH() async {
+  final Uri url = Uri.parse('https://');
+  if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Could not access to blog")));
+  }
+}
   // --- API CALLS ---
 
 // Force the room name to lowercase so everyone ends up in the same room
@@ -1201,26 +1282,24 @@ Widget _buildRoleSelection() {
               // Visual Header
               Container(
                 padding: const EdgeInsets.all(10),
-                  child: Image.asset(
-                    'assets/logo.png', // Ensure this matches your file name exactly
-                    width: 350,        // Adjust width to fit your design
-                    height: 300,       // Adjust height to fit your design
-                    fit: BoxFit.contain,
-                    // This part prevents the app from crashing if you haven't 
-                    // added the image to pubspec.yaml yet:
-                    errorBuilder: (context, error, stackTrace) {
-                      return const Icon(Icons.shield_moon, size: 80, color: Colors.blueAccent);
-                    },
-                  ),
+                child: Image.asset(
+                  'assets/logo.png',
+                  width: 350,
+                  height: 300,
+                  fit: BoxFit.contain,
+                  errorBuilder: (context, error, stackTrace) {
+                    return const Icon(Icons.shield_moon, size: 80, color: Colors.blueAccent);
+                  },
                 ),
+              ),
               const SizedBox(height: 24),
               const Text(
-                "COMMANDER BEDH", 
+                "COMMANDER BEDH",
                 style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, letterSpacing: 1.2),
               ),
               const Text("Enter ID to view or Password to manage"),
               const SizedBox(height: 40),
-              
+
               // Tournament ID (Room)
               TextField(
                 controller: _roomController,
@@ -1262,28 +1341,44 @@ Widget _buildRoleSelection() {
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     elevation: 0,
                   ),
-                  child: const Text("ENTER TOURNAMENT", 
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  child: const Text("ENTER TOURNAMENT",
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                 ),
               ),
-              const SizedBox(height: 24),
-              
-              /*const Text("— OR —", style: TextStyle(color: Colors.grey)),
-              
-              // QR Scan
-              TextButton.icon(
-                onPressed: _scanJoinCode,
-                icon: const Icon(Icons.qr_code_scanner),
-                label: const Text("Scan QR Code"),
-              ),*/
             ],
           ),
         ),
       ),
     ),
+
+    // --- NEW PROFESSIONAL FOOTER ---
+    bottomNavigationBar: Container(
+      height: 60,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border(top: BorderSide(color: Colors.grey.shade200)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        children: [
+          _buildFooterLink("REGLAMENTO", Icons.picture_as_pdf_outlined, _launchRulesPDF),
+          _buildFooterLink("BLOG", Icons.picture_as_pdf_outlined, _launchBEDH),
+          _buildFooterLink("FAQ", Icons.help_outline, _showFAQ),
+          _buildFooterLink("CONOCENOS", Icons.info_outline, _showAboutUs),
+        ],
+      ),
+    ),
   );
 }
 
+// Helper for Footer Buttons
+Widget _buildFooterLink(String label, IconData icon, VoidCallback onTap) {
+  return TextButton.icon(
+    onPressed: onTap,
+    icon: Icon(icon, size: 18, color: Colors.blueGrey),
+    label: Text(label, style: const TextStyle(fontSize: 11, color: Colors.blueGrey, fontWeight: FontWeight.bold)),
+  );
+}
  Widget _buildMainView() {
 
   if (isFinished) return _buildPodiumView();
