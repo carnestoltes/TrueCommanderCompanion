@@ -1,6 +1,28 @@
 # Commander BEDH Tournament Manager
+### *Advanced Swiss Pairing & Result Management for Multiplayer Pods*
 
-A full-stack tournament management system designed for Commander (EDH) pods. It features a Dart-based backend server and a Flutter mobile application for real-time table assignments, result reporting, and advanced tie-breaker calculations.
+[![Dart](https://img.shields.io/badge/Dart-0175C2?style=for-the-badge&logo=dart&logoColor=white)](https://dart.dev)
+[![Flutter](https://img.shields.io/badge/Flutter-02569B?style=for-the-badge&logo=flutter&logoColor=white)](https://flutter.dev)
+[![Scryfall API](https://img.shields.io/badge/API-Scryfall-red?style=for-the-badge)](https://scryfall.com/docs/api)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
+
+**Commander BEDH** is a full-stack tournament management system specifically engineered for the unique challenges of 4-player Commander (EDH) pods. It replaces naive pairing systems with a **Balanced Swiss** model to ensure competitive integrity.
+
+---
+
+## System Architecture
+
+**Backend:** A Dart server using the shelf package. It manages the global state (players, history, tables) in memory.
+
+**Frontend:** A Flutter application with two distinct roles: Admin (controls the tournament flow) and Player (views assignments and rankings).
+
+```bash
+TrueCommanderCompanion/
+├── apps/
+│   ├── server/           # Shelf-based Dart REST API
+│   └── true_commander/   # Flutter Mobile App (Android/iOS)
+└── packages/
+    └── shared_logic/     # Shared Domain Models & Swiss Services
 
 ## Server Module
 
@@ -10,75 +32,15 @@ A full-stack tournament management system designed for Commander (EDH) pods. It 
 
 * [App Schedule](apps/true_command/lib/README.md)
 
-## System Architecture
+# Key Features
 
-The system follows a Client-Server model over a Local Area Network (LAN).
+**1. Adaptative Pairing Engine**
 
-**Backend:** A Dart server using the shelf package. It manages the global state (players, history, tables) in memory.
+*Dynamic Scaling:* Automatically generates optimal 4-player pods, scaling to 3-player pods only when mathematically necessary.
 
-**Frontend:** A Flutter application with two distinct roles: Admin (controls the tournament flow) and Player (views assignments and rankings).
-    
-### High Level Architecture Client/Server
+*1v1 Support:* Fully supports a "Dual" modality with standard 1v1 Swiss pairings.
 
-```bash
-TrueCommanderCompanion/
-│
-├──apps/
-│   ├── server/
-│   │   ├── bin/
-│   │   │    └── server.dart 
-│   │   ├── test/
-│   │   │    └── server_test.dart     
-│   │   ├── .dockerignore
-│   │   ├── .gitignore
-│   │   ├── CHANGELOG.md
-│   │   ├── Dockerfile
-│   │   ├── README.md
-│   │   ├── analysis_options.yaml
-│   │   └── pubspec.yaml  
-│   │    
-│   ├── true_commander/
-│   │   ├── android/
-│   │   ├── assets/
-│   │   ├── ios/
-│   │   ├── lib/
-│   │   │   ├── lobby_screen.dart
-│   │   │   └── main.dart
-│   │   ├── linux/
-│   │   ├── macos/
-│   │   ├── test/
-│   │   ├── web/
-│   │   ├── windows/
-│   │   ├── .gitignore
-│   │   ├── .metadata
-│   │   ├── LICENSE
-│   │   ├── README.md
-│   │   ├── analysis_options.yaml
-│   │   └── pubspec.yaml 
-│   │
-├──packages/shared_logic
-│   └── lib/
-│   │   ├── domain/
-│   │   │     ├── player.dart
-│   │   │     └── table.dart
-│   │   └── services/
-│   │   │     └── swiss_pairing_service.dart
-├──.gitignore
-├──LICENSE
-├── pubspec.lock
-├── pubspec.yaml
-└── README
-```
-
-# Features
-
-**1. Dynamic Pod Assignment**
-
-The server automatically generates pods based on the total number of players:
-
-* Prioritizes 4-player pods.
-
-* Automatically creates 3-player pods if the total count isn't divisible by 4.
+*Balanced Swiss Model:* Unlike "Naive Swiss," our algorithm seeds pods to ensure a fair distribution of player strength, preventing "Death Tables" where top players eliminate each other early.
 
 **2. Real Strength of Schedule (SoS)**
 
@@ -88,75 +50,17 @@ Unlike simple tie-breakers, this system uses the Buchholz System:
 
 *Why it works:* It rewards players who played against tougher opponents. If your Round 1 opponent goes on to win the whole tournament, your SoS increases automatically.
 
-**3. Admin Tools**
+**3. Comprehensive Deck Validation**
 
-__Update Server IP:__ Change connection settings without restarting the app.
+*Scryfall Integration:* Real-time decklist validation checking for card legality and budget limits.
 
-__Security:__ Admin actions are protected by a server-side password.
+*Buffer Logic:* Automatically applies a 10% price buffer to account for market fluctuations.
 
-__Undo System:__ Mistakenly reported results can be deleted, and points are automatically recalculated.
+*UX-Focused:* Features a smooth progress-driven UI to handle large batch queries without user anxiety.
 
-## Deployment
+**4. Admin "In-Game" Rules**
 
-### Prerequisites
-* [Dart SDK](https://dart.dev/get-dart)
-* [Flutter SDK](https://docs.flutter.dev/install/quick)
-    
-## Swiss Algorithm
-
-### Design Rules
-* Prefer tables of 4 players
-* Allow tables of 3 players only when unavoidable
-
-### Naive Swiss vs Balanced Swiss
-
-Model of **naive swiss** take the four player with the most score in one table and the tail of other four in the other table so, making the avg of two pairing, the first table has an avg of 10.5 points against the second tables has only an avg of 4.5.
-Translation meaning, death teable vs free win table, strong player elimated each other while weak players farm points.
-
-Our model, **balanced swiss**, obtainig as result in each match obtain 1 strong player, 1 mid-strong player, 1 mid-weak player and 1 weak player.
-
-* Minimize the number of repeated opponents thought the tournament rounds
-* Balance average points
-  
-Example scenario
-
-An 8 players end the first round and the score result is:
-
-|Player|Points|
-|------|------|
-|   A  |  12  |
-|   B  |  11  |
-|   C  |  10  |
-|   D  |  9   |
-|   E  |  6   |
-|   F  |  5   |
-|   G  |  4   |
-|   H  |  3   |
-
-
-Put in table one A, D, E, H and table two B, C, F, G given as result of avg in point 7.5 in each table.
-
-Exist eight players in the event, A .. H and player A already plays with B, C and D so E, F, G, H are preferred but just in case we need it, player A repeat pairing against player B, C or D dependending of global classification.
-
-**Complexity in the worst case: O(n^2)**
-
-## SoS (Strengh of Schedule)
-
-In tournament software SoS stands for Strength of Schedule.
-
-It is the most common tie-breaker used to rank players who have the same number of total points.
-
-How it works:
-
-If you and another player both have 9 points, the computer needs a way to decide who is "#1" and who is "#2." It looks at the opponents you played against:
-
-__High SoS:__ You played against "strong" opponents (players who won most of their other matches).
-
-__Low SoS:__ You played against "weak" opponents (players who lost most of their other matches).
-
-The logic is that it is harder to earn 9 points against pro players than it is to earn 9 points against beginners. Therefore, the person with the higher SoS wins the tie-breaker.
-
-## Rule Assignment
+To handle the "Draw" problem in timed Commander rounds, the Admin can trigger a randomized tie-breaker rule (16.6% probability) based on:
 
 ### Motivation
 
@@ -190,17 +94,17 @@ This rules applies the logical of count a buch of permanents in your board *excl
 
 Account for number of entites could produce mana like, mana rocks, mana dorks ...
 
-## Blog
+## External Resources
+
 [Budget Elder Dragon Highlander](https://sites.google.com/view/magicbedh)
 
-## Rules in Spanish
 [Reglamento](rules/reglasBEDH.pdf)
 
-## Rules in English
 [Ruling](rules/rulesBEDH.pdf)
 
-## Collaboration
-*In this section i want to thank to my brother, who has gone to the care to develop a modality inside of Commander for make arrive everyone the posibility of a good experience agains others formats prioritizing the ingenuity versus stapples*
+## ❤️ Acknowledgments
+
+Dedicated to my brother, the visionary behind the BEDH modality. His commitment to prioritizing player ingenuity over "expensive staples" remains the core philosophy of this project.
 
 
 
