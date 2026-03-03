@@ -12,7 +12,7 @@
 
 ## System Architecture
 
-**Backend:** A Dart server using the shelf package. It manages the global state (players, history, tables) in memory.
+**Backend:** A Dart server using the shelf package. It manages the global state (players, history, tables).
 
 **Frontend:** A Flutter application with two distinct roles: Admin (controls the tournament flow) and Player (views assignments and rankings).
 
