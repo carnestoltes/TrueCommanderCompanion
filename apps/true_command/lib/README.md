@@ -33,7 +33,7 @@ The app uses a `Timer.periodic` set to **3 seconds**.
 - **Random Tie-Breaker:** The Admin can tap the 🎲 icon on any table to generate a random rule (e.g., "Total Life" or "Number of Permanents") to resolve in-game draws.
 - **Session Protection:** Changing the Server IP or Admin Password automatically clears the local session and returns the user to the Login screen to prevent data corruption.
 - **Budget Validation:** Let the administrator the ability of check decklist to corroborate the legality of the deck.
-- **Bulk adding** With this feature, you can paste directly from a message text app the participants for adding instead add one by one.
+- **Bulk adding:** With this feature, you can paste directly from a message text app the participants for adding instead add one by one.
 
 ## Dependencies
 - `http`: For REST communication.
