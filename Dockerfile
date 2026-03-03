@@ -17,7 +17,7 @@ COPY . .
 # 4. Build Flutter Web
 RUN cd apps/true_command && \
     flutter clean && \
-    flutter build web --release --base-href "/"
+    flutter build web --release --base-href "/" --web-renderer html --no-tree-shake-icons
 
 # 5. Build Dart Server Binary
 RUN cd apps/server && \
