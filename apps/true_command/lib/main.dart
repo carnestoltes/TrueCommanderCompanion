@@ -69,7 +69,6 @@ class TournamentApp extends StatefulWidget {
 class _TournamentAppState extends State<TournamentApp> {
   // --- CONFIGURATION ---
   String serverUrl = "https://truecommandercompanion.onrender.com";
-  //String serverUrl = "https://192.168.1.13:8080"; // Local testing URL (use your actual local IP)
   
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _roomController = TextEditingController(); 

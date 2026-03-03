@@ -2,14 +2,18 @@
 .env
 *.bat
 
-# Dart/Flutter
-.dart_tool/
-.flutter-plugins
-.flutter-plugins-dependencies
-.packages
-build/
-.pub/
+# Ignore the heavy stuff
+**/build/
+**/.dart_tool/
+**/.pub/
+**/.packages
+**/.flutter-plugins*
+**/.idea/
+**/.vscode/
 
-# IDE
-.vscode/
-.idea/
+# Ignore the mobile folders if you are only building for Web
+**/android/
+**/ios/
+**/windows/
+**/linux/
+**/macos/
