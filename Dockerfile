@@ -15,9 +15,12 @@ RUN flutter pub get
 COPY . .
 
 # 4. Build Flutter Web
+# Replace your build line with this:
 RUN cd apps/true_command && \
-    flutter clean && \
-    flutter build web --release --base-href "/" --web-renderer html --no-tree-shake-icons
+    flutter build web --release \
+    --web-renderer html \
+    --no-tree-shake-icons \
+    --dart-define=FLUTTER_WEB_CANVASKIT_URL=https://www.gstatic.com/flutter-canvaskit/
 
 # 5. Build Dart Server Binary
 RUN cd apps/server && \
