@@ -25,7 +25,7 @@ COPY apps/server/pubspec.yaml ./apps/server/
 COPY packages/shared_logic/pubspec.yaml ./packages/shared_logic/
 
 WORKDIR /app/apps/server
-RUN flutter pub get
+RUN dart pub get
 
 WORKDIR /app
 COPY apps/server/ ./apps/server/
