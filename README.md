@@ -25,14 +25,6 @@ TrueCommanderCompanion/
     └── shared_logic/     # Shared Domain Models & Swiss Services
 ```
 
-## Server Module
-
-* [Server Schedule](apps/server/bin/README.md)
-
-## APP Module
-
-* [App Schedule](apps/true_command/lib/README.md)
-
 # Key Features
 
 **1. Adaptative Pairing Engine**
@@ -93,13 +85,13 @@ This rules applies the logical of count a buch of permanents in your board *excl
 
 Account for number of entites could produce mana like, mana rocks, mana dorks ...
 
-## External Resources
+## Resources & Documentation
 
-[Budget Elder Dragon Highlander](https://sites.google.com/view/magicbedh)
+* **Official blog:** [Budget Elder Dragon Highlander](https://sites.google.com/view/magicbedh)
 
-[Reglamento](rules/reglasBEDH.pdf)
+* **Technical modules:** [Server Schedule](apps/server/bin/README.md) | [App Schedule](apps/true_command/lib/README.md)
 
-[Ruling](rules/rulesBEDH.pdf)
+* **Official regulations:** [Reglamento](rules/reglasBEDH.pdf) | [Ruling](rules/rulesBEDH.pdf)
 
 ## ❤️ Acknowledgments
 
