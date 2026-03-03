@@ -1,43 +1,51 @@
-# ---------- STAGE 1: Build Everything ----------
-FROM ghcr.io/cirruslabs/flutter:stable AS builder
+# ---------- STAGE 1: Build Flutter Web ----------
+FROM ghcr.io/cirruslabs/flutter:stable AS web-build
 WORKDIR /app
 
-# 1. Copy pubspecs to cache dependencies
+# Copy the "Skeleton"
 COPY pubspec.yaml ./
 COPY apps/true_command/pubspec.yaml ./apps/true_command/
 COPY apps/server/pubspec.yaml ./apps/server/
 COPY packages/shared_logic/pubspec.yaml ./packages/shared_logic/
 
-# 2. Get dependencies for all packages
+# Resolve dependencies for the WHOLE workspace (using flutter pub)
 RUN flutter pub get
 
-# 3. Copy source code (Respects .dockerignore)
-COPY . .
+# Copy source code and build the web app
+COPY apps/true_command/ ./apps/true_command/
+COPY packages/shared_logic/ ./packages/shared_logic/
+RUN cd apps/true_command && flutter build web --release
 
-# 4. Build Flutter Web
-# Replace your build line with this:
-RUN cd apps/true_command && \
-    flutter build web --release \
-    --web-renderer html \
-    --no-tree-shake-icons \
-    --dart-define=FLUTTER_WEB_CANVASKIT_URL=https://www.gstatic.com/flutter-canvaskit/
+# ---------- STAGE 2: Build Dart Server ----------
+# WE USE FLUTTER HERE TOO so the solver can find the Flutter SDK
+FROM ghcr.io/cirruslabs/flutter:stable AS server-build
+WORKDIR /app
 
-# 5. Build Dart Server Binary
-RUN cd apps/server && \
-    dart compile exe bin/server.dart -o /app/server_bin
+# Copy the "Skeleton" again
+COPY pubspec.yaml ./
+COPY apps/true_command/pubspec.yaml ./apps/true_command/
+COPY apps/server/pubspec.yaml ./apps/server/
+COPY packages/shared_logic/pubspec.yaml ./packages/shared_logic/
 
-# ---------- STAGE 2: Final Runtime ----------
+# Now this will pass because it can see the Flutter SDK for true_command
+RUN flutter pub get
+
+# Copy server source and shared logic
+COPY apps/server/ ./apps/server/
+COPY packages/shared_logic/ ./packages/shared_logic/
+
+# We still compile using 'dart' because it's a backend app
+RUN cd apps/server && dart compile exe bin/server.dart -o /app/server_bin
+
+# ---------- STAGE 3: Final Runtime ----------
+# This stays the same (small and clean)
 FROM debian:stable-slim
 WORKDIR /app
 
-# Install necessary libraries for Dart binary to run
-RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
-
 # Copy the compiled binary and the web files
-COPY --from=builder /app/server_bin ./server
-COPY --from=builder /app/apps/true_command/build/web ./web_bundle
+COPY --from=server-build /app/server_bin ./server
+COPY --from=web-build /app/apps/true_command/build/web ./web_bundle
 
-# Set runtime environment
 ENV PORT=8080
 EXPOSE 8080
 

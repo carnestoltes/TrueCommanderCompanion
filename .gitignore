@@ -3,18 +3,10 @@
 *.bat
 
 # Ignore the heavy stuff
-**/build/
-**/.dart_tool/
-**/.pub/
-**/.packages
-**/.flutter-plugins*
-**/.idea/
-**/.vscode/
-
-# Ignore the mobile folders if you are only building for Web
-**/android/
-**/ios/
-**/windows/
-**/linux/
-**/macos/
-.git/
+*/build/
+*/.dart_tool/
+*/.pub/
+*/.packages
+*/.flutter-plugins*
+*/.idea/
+*/.vscode/
