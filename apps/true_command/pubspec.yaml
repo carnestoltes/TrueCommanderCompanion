@@ -5,7 +5,7 @@ publish_to: 'none'
 resolution: workspace
 
 environment:
-  sdk: ^3.11.0
+  sdk: ">=3.3.0 <4.0.0"
 
 dependencies:
   flutter:
@@ -29,4 +29,4 @@ flutter:
   uses-material-design: true
   assets:
     - assets/logo.png
-    - assets/AboutUs.png
+    - assets/AboutUS.png
