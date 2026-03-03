@@ -200,7 +200,7 @@ Account for number of entites could produce mana like, mana rocks, mana dorks ..
 [Ruling](rules/rulesBEDH.pdf)
 
 ## Collaboration
-*In this section i want to thank a person has gone to the care to develop a modality inside of Commander for make arrive everyone the posibility of a good experience agains others formats prioritizing the ingenuity versus stapples*
+*In this section i want to thank to my brother, who has gone to the care to develop a modality inside of Commander for make arrive everyone the posibility of a good experience agains others formats prioritizing the ingenuity versus stapples*
 
 
 
