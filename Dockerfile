@@ -1,5 +1,5 @@
 # ---------- STAGE 1: Build ----------
-FROM ghcr.io/cirruslabs/flutter:3.24.0 AS builder
+FROM ghcr.io/cirruslabs/flutter:3.27.0 AS builder
 WORKDIR /app
 
 # 1. STOP THE 403 ERROR: Pre-download the web engine
