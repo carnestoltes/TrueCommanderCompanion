@@ -1,11 +1,10 @@
 name: BEDH
 version: 1.0.0
-description: "A community project for tournament fairness and integrity."
 publish_to: 'none'
-resolution: workspace
+resolution: workspace 
 
 environment:
-  sdk: ^3.11.1
+  sdk: '>=3.5.0 <4.0.0' 
 
 dependencies:
   flutter:
@@ -29,4 +28,4 @@ flutter:
   uses-material-design: true
   assets:
     - assets/logo.png
-    - assets/AboutUS.png
+    - assets/About.png 
