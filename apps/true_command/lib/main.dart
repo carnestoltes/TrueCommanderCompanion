@@ -295,7 +295,7 @@ void _showAboutUs() {
           const SizedBox(height: 16),
           ClipRRect(
             borderRadius: BorderRadius.circular(12),
-            child: Image.asset('assets/AboutUs.png', fit: BoxFit.cover, height: 200, errorBuilder: (context, error, stackTrace) {
+            child: Image.asset('assets/About.png', fit: BoxFit.cover, height: 200, errorBuilder: (context, error, stackTrace) {
                     return Container(
                       height: 200,
                       decoration: BoxDecoration(
