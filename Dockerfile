@@ -2,19 +2,28 @@
 FROM ghcr.io/cirruslabs/flutter:3.24.0 AS web-build
 WORKDIR /app
 
-# Copiar pubspecs primero para cachear dependencias
+# Configurar Flutter para web
+RUN flutter config --enable-web
+
+# Copiar archivos de dependencias
 COPY pubspec.yaml .
 COPY apps/true_command/pubspec.yaml ./apps/true_command/
+COPY apps/server/pubspec.yaml ./apps/server/
 COPY packages/shared_logic/pubspec.yaml ./packages/shared_logic/
 
-# Obtener dependencias desde la raíz del workspace
-RUN dart pub get
+# Crear estructura necesaria para el workspace
+RUN mkdir -p apps/server/bin
 
-# Copiar el resto del código
+# Obtener dependencias para la app Flutter (usa Flutter SDK)
+WORKDIR /app/apps/true_command
+RUN flutter pub get
+
+# Copiar el código fuente
+WORKDIR /app
 COPY apps/true_command/ ./apps/true_command/
 COPY packages/shared_logic/ ./packages/shared_logic/
 
-# Construir web
+# Construir la web
 WORKDIR /app/apps/true_command
 RUN flutter build web --release
 
@@ -22,42 +31,49 @@ RUN flutter build web --release
 FROM dart:stable AS server-build
 WORKDIR /app
 
-# IMPORTANTE: Copiar el pubspec.yaml raíz primero
+# Copiar todos los pubspec.yaml
 COPY pubspec.yaml .
+COPY apps/true_command/pubspec.yaml ./apps/true_command/
 COPY apps/server/pubspec.yaml ./apps/server/
 COPY packages/shared_logic/pubspec.yaml ./packages/shared_logic/
 
-# Obtener dependencias desde el contexto correcto
-# Primero en la raíz del workspace para resolver las dependencias locales
+# Crear directorio dummy para true_command (para satisfacer el workspace)
+RUN mkdir -p apps/true_command && \
+    echo "name: true_command_dummy" > apps/true_command/pubspec.yaml && \
+    echo "environment:" >> apps/true_command/pubspec.yaml && \
+    echo "  sdk: ^3.11.1" >> apps/true_command/pubspec.yaml
+
+# SOLO UNA VEZ: Resolver dependencias desde la raíz del workspace
+# Esto resuelve las dependencias de server y shared_logic
 WORKDIR /app
 RUN dart pub get
 
-# Luego en el servidor específicamente
-WORKDIR /app/apps/server
-RUN dart pub get
-
-# Copiar el código fuente
+# Copiar el código real del servidor y shared_logic
 COPY apps/server/ ./apps/server/
 COPY packages/shared_logic/ ./packages/shared_logic/
 
-# Compilar el servidor - NOTA: estamos en /app/apps/server
+# Compilar el servidor (ahora con todas las dependencias resueltas)
+WORKDIR /app/apps/server
+RUN ls -la bin/ # Debug: verificar que server.dart existe
 RUN dart compile exe bin/server.dart -o /app/server_bin
 
 # ---------- STAGE 3: Final Runtime ----------
 FROM debian:stable-slim
 WORKDIR /app
 
-# Instalar dependencias necesarias para el ejecutable
+# Instalar dependencias necesarias
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
+# Copiar los artefactos construidos
 COPY --from=server-build /app/server_bin ./server
 COPY --from=web-build /app/apps/true_command/build/web ./web_bundle
 
-# Verificar que el ejecutable existe y tiene permisos
+# Dar permisos de ejecución
 RUN chmod +x ./server
 
+# Configurar puerto
 ENV PORT=8080
 EXPOSE 8080
 
