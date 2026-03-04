@@ -3,6 +3,10 @@
 *.bat
 
 # Ignore the heavy stuff
-
+**/.dart_tool/
+**/build/
+**/android/
+**/ios/
+.git/
 */.idea/
 */.vscode/
