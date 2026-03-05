@@ -62,7 +62,6 @@ class _LobbyScreenState extends State<LobbyScreen> {
       // This is where you will eventually put the "START" button
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () {
-          // TODO: Trigger the Snake Distribution algorithm!
         },
         label: const Text("Start Round 1"),
         icon: const Icon(Icons.play_arrow),
