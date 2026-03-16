@@ -67,8 +67,15 @@ class TournamentApp extends StatefulWidget {
 }
 
 class _TournamentAppState extends State<TournamentApp> {
-  // --- CONFIGURATION ---
-  String serverUrl = "https://truecommandercompanion.onrender.com";
+String get serverUrl {
+  if (kIsWeb) {
+    // This gets the current domain, protocol, and port from the browser
+    // e.g., https://purple-banana-123.trycloudflare.com
+    return Uri.base.origin;
+  }
+  // Fallback for local testing or mobile
+  return "http://192.168.1.XX:8080"; 
+}
   
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _roomController = TextEditingController(); 
@@ -697,7 +704,7 @@ void _confirmReset() {
 void _showJoinQR() {
   // Use your actual Render URL + the lobby path
   // This makes the QR code a "clickable link" for phone cameras
-  String qrData = "https://truecommandercompanion.onrender.com/lobby/$roomName";
+  String qrData = "$serverUrl/lobby/$roomName";
 
   showDialog(
     context: context,
@@ -888,7 +895,7 @@ void massAddPlayers(String rawNames) {
 }
 
 void _handleEntry() async {
-  final room = _roomController.text.trim();
+  final room = _roomController.text.trim().toLowerCase();
   final pass = _passwordController.text.trim();
 
   if (room.isEmpty) {
